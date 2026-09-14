@@ -1,6 +1,8 @@
 [tool.pytest.ini_options]
 minversion = "8.0"
 testpaths = ["tests"]
+# Utan detta hittar inte `pytest` (som kommando) paketet src/ - bara `python -m pytest` gör det.
+pythonpath = ["."]
 addopts = "-ra --strict-markers --strict-config --import-mode=importlib"
 xfail_strict = true
 filterwarnings = [
