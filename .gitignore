@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtuella miljöer
+.venv/
+venv/
+
+# Hemligheter
+.env
+.streamlit/secrets.toml
+
+# Verktygscache
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+# Tränade modeller byggs om från koden, versionshanteras inte
+models/
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
