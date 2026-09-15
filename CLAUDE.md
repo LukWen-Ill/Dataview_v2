@@ -13,13 +13,14 @@ Inlämning KK2, kursen "Tillämpad maskininlärning med Python".
 
 I scope:
 - Binär klassificering: churnar kunden eller inte.
-- En modell (logistisk regression i en sklearn-`Pipeline`), tränad på `data/raw/telco_churn.csv`.
+- Flera modeller i sklearn-`Pipeline`, tränade på `data/raw/telco_churn.csv` och jämförda på samma
+  split. Hyperparametertuning med `GridSearchCV` som del av träningen.
 - Streamlit-app med datautforskning, modellmetrics och prediktion (en kund + CSV-batch).
 - CI på GitHub Actions: lint, tester, end-to-end-träning.
 - CD: Streamlit Community Cloud deployar automatiskt från `main`.
 
 Utanför scope (lägg inte till utan att fråga):
-- Fler modeller, hyperparametersökning, deep learning.
+- Deep learning.
 - Databas, användarinloggning, API-lager, Docker.
 - Ommärkning eller schemaändringar av datasettet.
 
@@ -31,6 +32,7 @@ src/data.py                inläsning, schemavalidering, rensning
 src/features.py            ColumnTransformer: skalning + one-hot
 src/model.py               pipeline, träning, metrics, spara/ladda
 src/train.py               CLI: python -m src.train
+.notebooks/                notebooks som redovisar träningen
 app.py                     Streamlit-entrypoint
 tests/                     pytest
 .github/workflows/ci.yml   CI
@@ -39,7 +41,8 @@ tests/                     pytest
 ## Arbetssätt
 
 - **Code-first.** All logik bor i `src/`. `app.py` är bara presentation - ingen ML-logik där.
-  Inga notebooks i produktionsflödet.
+  Notebooks ligger i `.notebooks/` och redovisar träningen genom att importera från `src/` -
+  de är aldrig den enda platsen där en modell tränas.
 - **Basic branching.** `main` är skyddad i praktiken: allt arbete sker på feature-branch
   (`feature/<kort-namn>`), går in via PR, och CI måste vara grön innan merge.
 - **Tester får inte passera tyst.** Konkret betyder det:
