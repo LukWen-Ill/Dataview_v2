@@ -43,18 +43,17 @@ class Metrics:
 
 
 def build_pipeline(classifier=None) -> Pipeline:
-    """Förbehandling + logistisk regression i en enda pipeline."""
+    """Förbehandling + klassificerare i en enda pipeline."""
+    if classifier is None:
+        classifier = LogisticRegression(
+            max_iter=1000,
+            class_weight="balanced",
+            random_state=RANDOM_STATE,
+        )
     return Pipeline(
         [
             ("preprocess", build_preprocessor()),
-            (
-                "classifier",
-                    classifier or LogisticRegression(
-                    max_iter=1000,
-                    class_weight="balanced",
-                    random_state=RANDOM_STATE,
-                ),
-            ),
+            ("classifier", classifier),
         ]
     )
 
