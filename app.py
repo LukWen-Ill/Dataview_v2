@@ -5,6 +5,7 @@ from __future__ import annotations
 import altair as alt
 import pandas as pd
 import streamlit as st
+from sklearn.metrics import roc_curve
 
 from src.data import (
     CATEGORICAL_COLUMNS,
@@ -87,6 +88,20 @@ with model_tab:
         "Modellen är viktad mot minoritetsklassen (`class_weight='balanced'`). "
         "Det ger högre recall - den hittar fler churnare - till priset av lägre precision."
     )
+
+    st.subheader("ROC-kurva")
+    fpr, tpr, _ = roc_curve(trained.y_test, trained.y_proba)
+    roc_df = pd.DataFrame({"fpr": fpr, "tpr": tpr})
+    st.altair_chart(
+        alt.Chart(roc_df)
+        .mark_line()
+        .encode(
+            x=alt.X("fpr:Q", title="Falska larm", scale=alt.Scale(domain=[0, 1])),
+            y=alt.Y("tpr:Q", title="Recall", scale=alt.Scale(domain=[0, 1])),
+        ),
+        use_container_width=True,
+    )
+    st.caption(f"AUC = {metrics.roc_auc:.3f}")
 
 with predict_tab:
     single, batch = st.tabs(["En kund", "Ladda upp CSV"])
