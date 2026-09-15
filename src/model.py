@@ -42,14 +42,14 @@ class Metrics:
         return asdict(self)
 
 
-def build_pipeline() -> Pipeline:
+def build_pipeline(classifier=None) -> Pipeline:
     """Förbehandling + logistisk regression i en enda pipeline."""
     return Pipeline(
         [
             ("preprocess", build_preprocessor()),
             (
                 "classifier",
-                LogisticRegression(
+                    classifier or LogisticRegression(
                     max_iter=1000,
                     class_weight="balanced",
                     random_state=RANDOM_STATE,
