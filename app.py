@@ -5,7 +5,7 @@ from __future__ import annotations
 import altair as alt
 import pandas as pd
 import streamlit as st
-from sklearn.metrics import roc_curve
+from sklearn.metrics import roc_curve, confusion_matrix
 
 from src.data import (
     CATEGORICAL_COLUMNS,
@@ -102,6 +102,16 @@ with model_tab:
         use_container_width=True,
     )
     st.caption(f"AUC = {metrics.roc_auc:.3f}")
+
+    st.subheader("Confusion matrix")
+    y_pred = (trained.y_proba >= 0.5).astype(int)
+    tn, fp, fn, tp = confusion_matrix(trained.y_test, y_pred).ravel()
+
+    c1, c2 = st.columns(2)
+    c1.metric("Hittade churnare", tp)
+    c2.metric("Missade churnare", fn)
+    c1.metric("Falska larm", fp)
+    c2.metric("Korrekt bedömda som kvarstannande", tn)
 
 with predict_tab:
     single, batch = st.tabs(["En kund", "Ladda upp CSV"])
