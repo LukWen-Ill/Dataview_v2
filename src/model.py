@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
+import numpy as np
 
 import joblib
 import pandas as pd
@@ -41,6 +42,16 @@ class Metrics:
     def as_dict(self) -> dict[str, float]:
         return asdict(self)
 
+@dataclass(frozen=True)
+class TrainingResult:
+    """Allt träningen producerar: modellen, måtten och testmängdens utfall."""
+
+    pipeline: Pipeline
+    metrics: Metrics
+    y_test: pd.Series
+    y_proba: np.ndarray
+
+
 
 def build_pipeline(classifier=None) -> Pipeline:
     """Förbehandling + klassificerare i en enda pipeline."""
@@ -64,7 +75,7 @@ def train(
     *,
     test_size: float = TEST_SIZE,
     random_state: int = RANDOM_STATE,
-) -> tuple[Pipeline, Metrics]:
+) -> TrainingResult:
     """Träna på en stratifierad split och utvärdera på hållet testset."""
     if len(X) != len(y):
         raise ValueError(f"X och y har olika längd: {len(X)} vs {len(y)}")
@@ -88,7 +99,7 @@ def train(
         n_train=int(len(X_train)),
         n_test=int(len(X_test)),
     )
-    return pipeline, metrics
+    return TrainingResult(pipeline, metrics, y_test, y_proba)
 
 
 def predict_proba(pipeline: Pipeline, X: pd.DataFrame) -> pd.Series:

@@ -36,7 +36,8 @@ def get_model():
 
 try:
     raw = get_raw()
-    pipeline, metrics = get_model()
+    trained = get_model()
+    pipeline, metrics = trained.pipeline, trained.metrics
 except (FileNotFoundError, SchemaError) as err:
     st.error(f"Kunde inte starta appen: {err}")
     st.stop()

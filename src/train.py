@@ -17,10 +17,10 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     X, y = load_dataset(args.data)
-    pipeline, metrics = train(X, y)
-    path = save(pipeline, args.out)
 
-    print(json.dumps(metrics.as_dict(), indent=2))
+    result = train(X, y)
+    path = save(result.pipeline, args.out)
+    print(json.dumps(result.metrics.as_dict(), indent=2))
     print(f"Modell sparad: {path}")
     return 0
 

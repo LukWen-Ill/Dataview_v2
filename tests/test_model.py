@@ -13,7 +13,8 @@ from src.model import Metrics, build_pipeline, load, predict_proba, save, train
 @pytest.fixture
 def trained(raw_df):
     X, y = split_features_target(clean(raw_df))
-    return train(X, y), X
+    result = train(X, y)
+    return (result.pipeline, result.metrics), X
 
 
 def test_train_returns_pipeline_and_metrics(trained):
@@ -48,8 +49,8 @@ def test_train_rejects_single_class_target(raw_df):
 
 def test_train_is_deterministic(raw_df):
     X, y = split_features_target(clean(raw_df))
-    first = train(X, y, random_state=7)[1]
-    second = train(X, y, random_state=7)[1]
+    first = train(X, y, random_state=7).metrics
+    second = train(X, y, random_state=7).metrics
     assert first == second
 
 
@@ -123,7 +124,7 @@ def test_untrained_pipeline_cannot_predict(raw_df):
 
 def test_real_data_beats_majority_baseline(real_data_path):
     X, y = load_dataset(real_data_path)
-    _, metrics = train(X, y)
+    metrics = train(X, y).metrics
     assert metrics.roc_auc > 0.75, f"ROC-AUC {metrics.roc_auc} - modellen är inte bättre än slump"
     assert metrics.recall > 0.5, f"Recall {metrics.recall} - missar för många churnare"
 
