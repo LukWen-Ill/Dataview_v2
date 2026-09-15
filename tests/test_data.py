@@ -17,6 +17,7 @@ from src.data import (
     load_raw,
     split_features_target,
     validate,
+    prepare_features,
 )
 
 
@@ -140,3 +141,13 @@ def test_load_dataset_rejects_broken_file(tmp_path, raw_df):
     raw_df.drop(columns=["Contract"]).to_csv(path, index=False)
     with pytest.raises(SchemaError, match="Contract"):
         load_dataset(path)
+
+def test_prepare_features_cleans_and_selects(raw_df):
+    X = prepare_features(raw_df)
+    assert list(X.columns) == FEATURE_COLUMNS
+    assert np.issubdtype(X["TotalCharges"].dtype, np.number)
+
+
+def test_prepare_features_works_without_target(raw_df):
+    X = prepare_features(raw_df.drop(columns=[TARGET_COLUMN]))
+    assert len(X) == len(raw_df)

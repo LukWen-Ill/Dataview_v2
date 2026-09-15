@@ -74,15 +74,18 @@ def clean(df: pd.DataFrame) -> pd.DataFrame:
             out[col] = pd.to_numeric(out[col], errors="coerce")
     return out
 
+def prepare_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Enda vägen från rå dataram till modellindata."""
+    validate(df, require_target=False)
+    return clean(df)[FEATURE_COLUMNS]
+
 
 def split_features_target(df: pd.DataFrame) -> tuple[pd.DataFrame, pd.Series]:
-    """Dela upp i features och binär target. Förutsätter validerad, rensad data."""
     y = df[TARGET_COLUMN].map(TARGET_MAP).astype(int)
-    return df[FEATURE_COLUMNS].copy(), y
+    return prepare_features(df), y
 
-
-def load_dataset(path: str | Path = DEFAULT_DATA_PATH) -> tuple[pd.DataFrame, pd.Series]:
-    """Hela vägen från fil till (X, y)."""
+def load_dataset(path=DEFAULT_DATA_PATH):
     df = load_raw(path)
-    validate(df)
-    return split_features_target(clean(df))
+    validate(df)                              # targeten kollas här
+    y = df[TARGET_COLUMN].map(TARGET_MAP).astype(int)
+    return prepare_features(df), y

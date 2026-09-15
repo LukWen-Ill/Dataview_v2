@@ -18,7 +18,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
-from src.data import FEATURE_COLUMNS, validate
+from src.data import FEATURE_COLUMNS, validate, prepare_features
 from src.features import build_preprocessor
 
 DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "churn_model.joblib"
@@ -93,9 +93,8 @@ def train(
 
 
 def predict_proba(pipeline: Pipeline, X: pd.DataFrame) -> pd.Series:
-    """Sannolikhet för churn. Validerar att alla feature-kolumner finns."""
-    validate(X, require_target=False)
-    proba = pipeline.predict_proba(X[FEATURE_COLUMNS])[:, 1]
+    """Sannolikhet för churn."""
+    proba = pipeline.predict_proba(prepare_features(X))[:, 1]
     return pd.Series(proba, index=X.index, name="churn_probability")
 
 

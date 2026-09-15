@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.data import SchemaError, clean, load_dataset, split_features_target
+from src.data import SchemaError, clean, load_dataset, split_features_target, prepare_features
 from src.model import Metrics, build_pipeline, load, predict_proba, save, train
 
 
@@ -126,3 +126,14 @@ def test_real_data_beats_majority_baseline(real_data_path):
     _, metrics = train(X, y)
     assert metrics.roc_auc > 0.75, f"ROC-AUC {metrics.roc_auc} - modellen är inte bättre än slump"
     assert metrics.recall > 0.5, f"Recall {metrics.recall} - missar för många churnare"
+
+def test_predict_proba_handles_raw_unclean_frame(trained, raw_df):
+    """Regression: Streamlit-batchen skickar rå CSV-data, inte förrensad."""
+    (pipeline, _), _ = trained
+    dirty = raw_df.iloc[[0]].copy()
+    dirty.loc[:, "TotalCharges"] = " "   # som de 11 raderna med tenure=0 i CSV:n
+
+    assert not pd.api.types.is_numeric_dtype(dirty["TotalCharges"])
+
+    proba = predict_proba(pipeline, dirty)
+    assert 0.0 <= proba.iloc[0] <= 1.0
