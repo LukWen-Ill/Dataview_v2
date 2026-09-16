@@ -18,8 +18,11 @@ venv/
 coverage.xml
 htmlcov/
 
-# Tränade modeller byggs om från koden, versionshanteras inte
-models/
+# Tränad modell + resultat versionshanteras (alternativ A) så att appen startar utan att träna.
+# Bygg om med: python -m src.train
+
+# SQLite-databasen byggs från CSV:n: python -m src.db
+data/churn.db
 
 # OS/editor
 .DS_Store
