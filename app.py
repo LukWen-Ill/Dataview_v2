@@ -51,17 +51,17 @@ st.markdown(
 1. **Data** – rå-CSV:n laddas in i SQLite (`data/churn.db`). Appen och träningen läser därifrån.
 2. **Feature engineering** – tre härledda kolumner: antal tilläggstjänster, snittkostnad per månad
    och kundtid i grupper.
-3. **Split** – stratifierat i {results['split']['n_train']} train / {results['split']['n_validation']}
-   validation / {results['split']['n_test']} test.
+3. **Split** – stratifierat i {results["split"]["n_train"]} train /
+   {results["split"]["n_validation"]} validation / {results["split"]["n_test"]} test.
 4. **Modeller** – logistisk regression, beslutsträd och random forest, alla i samma pipeline med
    imputering, skalning och one-hot. Hyperparametrar väljs med GridSearchCV
-   ({results['cv_folds']}-delad korsvalidering på train, scoring = {results['scoring']}).
+   ({results["cv_folds"]}-delad korsvalidering på train, scoring = {results["scoring"]}).
 5. **Modellval** – på validation. Slutmodellen tränas om på train + validation och utvärderas
    en enda gång på test.
 6. **Prediktion** – appen laddar `models/churn_model.joblib`, du väljer threshold och varje
    prediktion loggas i databasen.
 
-Använd menyn till vänster: **Data** (EDA), **Modeller** (utvärdering, threshold, feature importance),
-**Segmentering** (K-Means + PCA) och **Prediktera**.
+Använd menyn till vänster: **Data** (EDA), **Modeller** (utvärdering, threshold, feature
+importance), **Segmentering** (K-Means + PCA) och **Prediktera**.
 """
 )

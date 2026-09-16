@@ -105,10 +105,10 @@ with batch_tab:
             st.error(f"Filen gick inte att prediktera på: {err}")
         else:
             n_flagged = int(result["predicted_churn"].sum())
-            st.metric("Kunder flaggade som churn-risk", f"{n_flagged} av {len(result)}", border=True)
-            st.dataframe(
-                result.sort_values("churn_probability", ascending=False), width="stretch"
+            st.metric(
+                "Kunder flaggade som churn-risk", f"{n_flagged} av {len(result)}", border=True
             )
+            st.dataframe(result.sort_values("churn_probability", ascending=False), width="stretch")
             st.download_button(
                 "Ladda ner resultat",
                 result.to_csv(index=False).encode("utf-8"),

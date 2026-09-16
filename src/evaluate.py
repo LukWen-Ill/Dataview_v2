@@ -37,6 +37,10 @@ def apply_threshold(proba, threshold: float = DEFAULT_THRESHOLD) -> np.ndarray:
 
 def compute_metrics(y_true, proba, threshold: float = DEFAULT_THRESHOLD) -> dict[str, float]:
     """De fem måtten vi jämför modeller på. ROC-AUC beror inte på threshold, övriga gör det."""
+    if len(np.unique(y_true)) < 2:
+        raise ValueError(
+            "Båda klasserna måste finnas i y_true för att måtten ska vara definierade."
+        )
     y_pred = apply_threshold(proba, threshold)
     return {
         "accuracy": float(accuracy_score(y_true, y_pred)),
@@ -79,9 +83,7 @@ def plot_confusion_matrix(y_true, proba, threshold: float = DEFAULT_THRESHOLD) -
     fig = Figure(figsize=(4.5, 4))
     ax = fig.subplots()
     cm = confusion_matrix(y_true, apply_threshold(proba, threshold))
-    ConfusionMatrixDisplay(cm, display_labels=CLASS_NAMES).plot(
-        ax=ax, cmap="Blues", colorbar=False
-    )
+    ConfusionMatrixDisplay(cm, display_labels=CLASS_NAMES).plot(ax=ax, cmap="Blues", colorbar=False)
     ax.set_title(f"Confusion matrix (threshold {threshold:.2f})")
     ax.set_xlabel("Predikterat")
     ax.set_ylabel("Sant")
@@ -103,7 +105,7 @@ def plot_roc_curve(y_true, proba, label: str = "Modell") -> Figure:
 
 
 def feature_names(pipeline: Pipeline) -> list[str]:
-    """Kolumnnamnen efter förbehandlingen, utan prefixen num__/cat__ som ColumnTransformer lägger på."""
+    """Kolumnnamnen efter förbehandlingen, utan prefixen num__/cat__ från ColumnTransformer."""
     names = pipeline.named_steps["preprocess"].get_feature_names_out()
     return [name.split("__", 1)[1] for name in names]
 

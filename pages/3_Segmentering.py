@@ -65,11 +65,11 @@ with right:
     safest = profiles.loc[profiles["churn_andel"].idxmin()]
     st.markdown(
         f"""
-- **Segment {int(riskiest['segment'])}** har högst churn ({riskiest['churn_andel']:.0%}):
-  {riskiest['vanligaste_avtal']}, ca {riskiest['snitt_manadskostnad']:.0f} $/mån,
-  {riskiest['snitt_tenure']:.0f} månaders kundtid i snitt. Här finns störst potential för
+- **Segment {int(riskiest["segment"])}** har högst churn ({riskiest["churn_andel"]:.0%}):
+  {riskiest["vanligaste_avtal"]}, ca {riskiest["snitt_manadskostnad"]:.0f} $/mån,
+  {riskiest["snitt_tenure"]:.0f} månaders kundtid i snitt. Här finns störst potential för
   riktade åtgärder.
-- **Segment {int(safest['segment'])}** har lägst churn ({safest['churn_andel']:.0%}):
-  {safest['vanligaste_avtal']}, ca {safest['snitt_manadskostnad']:.0f} $/mån.
+- **Segment {int(safest["segment"])}** har lägst churn ({safest["churn_andel"]:.0%}):
+  {safest["vanligaste_avtal"]}, ca {safest["snitt_manadskostnad"]:.0f} $/mån.
 """
     )

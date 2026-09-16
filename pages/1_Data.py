@@ -54,7 +54,9 @@ with left:
         .encode(
             x=alt.X("tenure:Q", bin=alt.Bin(step=6), title="Kundtid (månader)"),
             y=alt.Y("count()", title="Antal kunder"),
-            color=alt.Color("Churn:N", scale=alt.Scale(domain=["No", "Yes"], range=["#4c78a8", "#e45756"])),
+            color=alt.Color(
+                "Churn:N", scale=alt.Scale(domain=["No", "Yes"], range=["#4c78a8", "#e45756"])
+            ),
         )
         .properties(height=280, title="De flesta som churnar gör det under första året")
     )
@@ -66,7 +68,11 @@ with right:
         .encode(
             x=alt.X("Churn:N"),
             y=alt.Y("MonthlyCharges:Q", title="Månadskostnad"),
-            color=alt.Color("Churn:N", legend=None, scale=alt.Scale(domain=["No", "Yes"], range=["#4c78a8", "#e45756"])),
+            color=alt.Color(
+                "Churn:N",
+                legend=None,
+                scale=alt.Scale(domain=["No", "Yes"], range=["#4c78a8", "#e45756"]),
+            ),
         )
         .properties(height=280, title="Churnare betalar mer per månad")
     )

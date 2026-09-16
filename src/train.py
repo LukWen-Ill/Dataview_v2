@@ -1,13 +1,13 @@
 """Träningsskript - hela ML-flödet från databas till sparad modell. Kör: python -m src.train
 
-    1. Läs kunddata från SQLite (databasen byggs från CSV:n om den saknas).
-    2. Rensa + feature engineering -> X, y.
-    3. Dela stratifierat i train (60 %) / validation (20 %) / test (20 %).
-    4. För varje modell: GridSearchCV med 5-delad korsvalidering på train.
-    5. Jämför modellerna på validation och välj den bästa.
-    6. Träna om den valda modellen på train + validation.
-    7. Utvärdera EN gång på test - testdatan har inte rörts innan dess.
-    8. Spara modell (joblib), resultat (JSON), testprediktioner (CSV) och logga i databasen.
+1. Läs kunddata från SQLite (databasen byggs från CSV:n om den saknas).
+2. Rensa + feature engineering -> X, y.
+3. Dela stratifierat i train (60 %) / validation (20 %) / test (20 %).
+4. För varje modell: GridSearchCV med 5-delad korsvalidering på train.
+5. Jämför modellerna på validation och välj den bästa.
+6. Träna om den valda modellen på train + validation.
+7. Utvärdera EN gång på test - testdatan har inte rörts innan dess.
+8. Spara modell (joblib), resultat (JSON), testprediktioner (CSV) och logga i databasen.
 """
 
 from __future__ import annotations
@@ -44,7 +44,11 @@ def split_data(X: pd.DataFrame, y: pd.Series, random_state: int = RANDOM_STATE):
         X, y, test_size=TEST_SIZE, stratify=y, random_state=random_state
     )
     X_train, X_val, y_train, y_val = train_test_split(
-        X_trainval, y_trainval, test_size=VALIDATION_SIZE, stratify=y_trainval, random_state=random_state
+        X_trainval,
+        y_trainval,
+        test_size=VALIDATION_SIZE,
+        stratify=y_trainval,
+        random_state=random_state,
     )
     return X_train, X_val, X_test, y_train, y_val, y_test
 
@@ -57,7 +61,9 @@ def tune(pipeline: Pipeline, grid: dict, X_train, y_train, random_state: int) ->
     return search
 
 
-def compare_models(candidates: dict, X_train, y_train, X_val, y_val, random_state: int) -> list[dict]:
+def compare_models(
+    candidates: dict, X_train, y_train, X_val, y_val, random_state: int
+) -> list[dict]:
     """Tuna varje modell på train och utvärdera den på validation."""
     results = []
     for name, (pipeline, grid) in candidates.items():
@@ -72,7 +78,8 @@ def compare_models(candidates: dict, X_train, y_train, X_val, y_val, random_stat
                 "estimator": search.best_estimator_,
             }
         )
-        print(f"{name:22s} CV ROC-AUC {search.best_score_:.3f}  val: {_fmt(results[-1]['validation'])}")
+        val_text = _fmt(results[-1]["validation"])
+        print(f"{name:22s} CV ROC-AUC {search.best_score_:.3f}  val: {val_text}")
     return results
 
 
@@ -134,7 +141,9 @@ def run(
         "test": test_metrics,
     }
     Path(results_path).parent.mkdir(parents=True, exist_ok=True)
-    Path(results_path).write_text(json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8")
+    Path(results_path).write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False), encoding="utf-8"
+    )
     pd.DataFrame(
         {
             ID_COLUMN: df.loc[X_test.index, ID_COLUMN].to_numpy(),

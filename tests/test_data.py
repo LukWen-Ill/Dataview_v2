@@ -1,4 +1,4 @@
-"""Tester för inläsning, validering och rensning."""
+"""Tester för inläsning, validering, rensning och feature engineering."""
 
 from __future__ import annotations
 
@@ -7,14 +7,18 @@ import pandas as pd
 import pytest
 
 from src.data import (
+    ADDON_SERVICES,
     FEATURE_COLUMNS,
     ID_COLUMN,
-    NUMERIC_COLUMNS,
+    RAW_FEATURE_COLUMNS,
+    RAW_NUMERIC_COLUMNS,
     TARGET_COLUMN,
     SchemaError,
+    add_features,
     clean,
     load_dataset,
     load_raw,
+    prepare_features,
     split_features_target,
     validate,
 )
@@ -38,7 +42,7 @@ def test_validate_accepts_valid_frame(raw_df):
 
 def test_validate_rejects_empty_frame():
     with pytest.raises(SchemaError, match="tomt"):
-        validate(pd.DataFrame(columns=[ID_COLUMN, TARGET_COLUMN, *FEATURE_COLUMNS]))
+        validate(pd.DataFrame(columns=[ID_COLUMN, TARGET_COLUMN, *RAW_FEATURE_COLUMNS]))
 
 
 @pytest.mark.parametrize("dropped", ["tenure", "Contract", TARGET_COLUMN])
@@ -105,10 +109,61 @@ def test_clean_does_not_mutate_input(raw_df):
     pd.testing.assert_frame_equal(dirty, before)
 
 
-def test_clean_makes_all_numeric_columns_numeric(raw_df):
+def test_clean_makes_all_raw_numeric_columns_numeric(raw_df):
     cleaned = clean(raw_df)
-    for col in NUMERIC_COLUMNS:
+    for col in RAW_NUMERIC_COLUMNS:
         assert np.issubdtype(cleaned[col].dtype, np.number), col
+
+
+# --- Feature engineering ---
+
+
+def test_num_addon_services_counts_yes(raw_df):
+    df = clean(raw_df)
+    df.loc[0, ADDON_SERVICES] = "Yes"
+    df.loc[1, ADDON_SERVICES] = "No"
+    df.loc[2, ADDON_SERVICES] = ["Yes", "Yes", "No", "No internet service", "No", "Yes"]
+    out = add_features(df)
+    assert out.loc[[0, 1, 2], "num_addon_services"].tolist() == [6, 0, 3]
+
+
+def test_avg_monthly_charge_is_total_over_tenure(raw_df):
+    df = clean(raw_df)
+    df.loc[0, ["tenure", "TotalCharges"]] = [10, 500.0]
+    assert add_features(df).loc[0, "avg_monthly_charge"] == pytest.approx(50.0)
+
+
+def test_avg_monthly_charge_is_nan_for_new_customers(raw_df):
+    """tenure = 0 skulle ge division med noll - vi lämnar NaN till imputern i stället."""
+    df = clean(raw_df)
+    df.loc[0, ["tenure", "TotalCharges"]] = [0, 0.0]
+    assert pd.isna(add_features(df).loc[0, "avg_monthly_charge"])
+
+
+@pytest.mark.parametrize(
+    ("tenure", "group"),
+    [(0, "0-12"), (12, "0-12"), (13, "13-24"), (48, "25-48"), (49, "49+"), (72, "49+")],
+)
+def test_tenure_group_boundaries(raw_df, tenure, group):
+    df = clean(raw_df)
+    df.loc[0, "tenure"] = tenure
+    assert add_features(df).loc[0, "tenure_group"] == group
+
+
+def test_add_features_does_not_mutate_input(raw_df):
+    df = clean(raw_df)
+    before = df.copy()
+    add_features(df)
+    pd.testing.assert_frame_equal(df, before)
+
+
+def test_prepare_features_returns_exactly_feature_columns(raw_df):
+    X = prepare_features(raw_df)
+    assert list(X.columns) == FEATURE_COLUMNS
+    assert len(X) == len(raw_df)
+
+
+# --- Split ---
 
 
 def test_split_maps_target_to_binary(raw_df):
@@ -117,15 +172,11 @@ def test_split_maps_target_to_binary(raw_df):
     assert y.sum() == (raw_df[TARGET_COLUMN] == "Yes").sum()
 
 
-def test_split_drops_id_column(raw_df):
+def test_split_drops_id_and_target(raw_df):
     X, _ = split_features_target(raw_df)
     assert ID_COLUMN not in X.columns
-    assert list(X.columns) == FEATURE_COLUMNS
-
-
-def test_split_drops_target_from_features(raw_df):
-    X, _ = split_features_target(raw_df)
     assert TARGET_COLUMN not in X.columns
+    assert list(X.columns) == FEATURE_COLUMNS
 
 
 def test_load_dataset_on_real_file(real_data_path):
@@ -133,6 +184,9 @@ def test_load_dataset_on_real_file(real_data_path):
     assert len(X) == len(y) == 7043
     assert list(X.columns) == FEATURE_COLUMNS
     assert set(y.unique()) == {0, 1}
+    # De 11 kunderna med tom TotalCharges har tenure 0 och ska ge NaN i båda kolumnerna.
+    assert X["TotalCharges"].isna().sum() == 11
+    assert X["avg_monthly_charge"].isna().sum() == 11
 
 
 def test_load_dataset_rejects_broken_file(tmp_path, raw_df):

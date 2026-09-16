@@ -48,8 +48,8 @@ with st.expander("Valda hyperparametrar"):
 
 st.markdown(
     f"""
-Modellerna ligger nära varandra. **{results['best_model']}** valdes eftersom den hade högst
-{results['selection_metric'].upper().replace('_', '-')} på validation. Läs måtten så här:
+Modellerna ligger nära varandra. **{results["best_model"]}** valdes eftersom den hade högst
+{results["selection_metric"].upper().replace("_", "-")} på validation. Läs måtten så här:
 
 - **Recall** – andel av de som faktiskt churnar som vi hittar. Viktigast för oss: en missad churnare
   är en förlorad kund.
@@ -113,8 +113,9 @@ if kind == "coefficient":
     )
 else:
     st.caption(
-        "Trädmodell: feature importance - hur mycket varje kolumn bidrar till att dela upp kunderna. "
-        "Summerar till 1. Säger hur *viktig* en kolumn är, inte åt vilket håll den påverkar."
+        "Trädmodell: feature importance - hur mycket varje kolumn bidrar till att dela upp "
+        "kunderna. Summerar till 1. Säger hur *viktig* en kolumn är, inte åt vilket håll den "
+        "påverkar."
     )
 left, right = st.columns([3, 2])
 with left:

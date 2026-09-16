@@ -30,9 +30,9 @@ def with_churn_flag(df: pd.DataFrame) -> pd.DataFrame:
 
 def churn_rate_by(df: pd.DataFrame, column: str) -> pd.DataFrame:
     """Churn-andel och antal kunder per kategori i en kolumn."""
-    if column not in df.columns:
+    data = with_churn_flag(df)  # härledda kolumner som tenure_group finns först efter detta
+    if column not in data.columns:
         raise KeyError(f"Kolumnen {column!r} finns inte i datan")
-    data = with_churn_flag(df)
     grouped = data.groupby(column, observed=True)["churn"].agg(["mean", "size"])
     grouped.columns = ["churn_andel", "antal_kunder"]
     return grouped.reset_index().sort_values("churn_andel", ascending=False)
