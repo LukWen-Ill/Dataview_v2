@@ -32,7 +32,8 @@ I scope:
 - Binär klassificering med tre modeller (logistisk regression, beslutsträd, random forest)
   i sklearn-`Pipeline`, små grids i `GridSearchCV` med 5-fold CV.
 - 60/20/20 stratifierad split. Testmängden används bara för slutlig utvärdering.
-- Streamlit med fem sidor: Översikt, Data (EDA), Modeller, Segmentering, Prediktera.
+- Streamlit med sex sidor: Översikt, Data (EDA), Modeller, Segmentering, Prediktera,
+  Ledning (extra).
 - K-Means + PCA för kundsegmentering.
 - CI på GitHub Actions: lint, tester, end-to-end-träning.
 
@@ -55,7 +56,9 @@ src/train.py               hela träningsflödet (CLI: python -m src.train)
 src/evaluate.py            metrics, threshold, confusion matrix, ROC, feature importance
 src/segment.py             K-Means, PCA, segmentprofiler
 src/eda.py                 aggregeringar för EDA-sidan
+src/dashboard.py           filtrering, prognos och nyckeltal för Ledning-sidan (extra)
 app.py, pages/, app_helpers.py   Streamlit – bara presentation
+pages/5_Ledning.py         Ledning-sidan (extra)
 tests/                     pytest
 docs/rapport.md            teknisk rapport
 ```

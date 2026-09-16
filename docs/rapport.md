@@ -102,6 +102,16 @@ Segment 1 – nya kunder med månadsavtal, hög kostnad och få tjänster – ä
 mest. Segmenteringen är icke-vägledd och svarar på "vilka kundtyper har vi?", medan
 churn-modellen svarar på "vilka enskilda kunder riskerar att lämna?".
 
+### 2.6 Ledningsvy (extra, utanför kursens krav)
+
+Sidan Ledning blickar framåt: varje aktiv kund (Churn = No) rullas fram 24 månader med
+sannolikheten (1 − p)^m att vara kvar, där p är modellens churn-sannolikhet, och summerar
+kvarvarande månadsintäkt och förväntad förlust. Prognosen gäller bara dagens
+aktiva kunder, antar konstant churn-risk per kund och månad, frysta priser och ingen
+nykundsförsäljning. Den visar vad som händer om vi inte gör något.
+Den bygger på den befintliga modellen utan omträning; beräkningarna ligger i
+`src/dashboard.py`.
+
 ## 3. Teknisk specifikation
 
 **Arkitektur.** `CSV → SQLite → Python/scikit-learn → joblib → Streamlit`. All logik ligger i
@@ -133,11 +143,11 @@ importance/koefficienter med korrekta namn efter one-hot.
 silhouette score, PCA till två komponenter (49 % förklarad varians) för visualisering,
 segmentprofiler.
 
-**Frontend.** Streamlit med fem sidor: Översikt, Data (EDA med Altair), Modeller
+**Frontend.** Streamlit med sex sidor: Översikt, Data (EDA med Altair), Modeller
 (jämförelse, test, threshold-slider, feature importance), Segmentering, Prediktera (formulär
-och CSV-batch, loggning till databasen).
+och CSV-batch, loggning till databasen), Ledning (extra: intäktsprognos).
 
-**Kvalitet.** 124 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
+**Kvalitet.** 162 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
 felfallstester för saknad fil/kolumn/modell/databas, ogiltig target, okänd kategori,
 threshold utanför 0–1. Ruff för lint och formatering. GitHub Actions kör lint, tester på
 Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
