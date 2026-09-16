@@ -18,6 +18,7 @@ PAGES = [
     ROOT / "pages" / "2_Modeller.py",
     ROOT / "pages" / "3_Segmentering.py",
     ROOT / "pages" / "4_Prediktera.py",
+    ROOT / "pages" / "5_Ledning.py",
 ]
 
 
@@ -106,3 +107,12 @@ def test_customers_with_predictions_raises_when_model_is_missing(monkeypatch, tm
     st.cache_resource.clear()
     with pytest.raises(FileNotFoundError):
         get_customers_with_predictions()
+
+
+def test_ledning_page_shows_kpis_and_table():
+    """Default-filter (tomma listor) ska ge KPI-rad, graf och tabell utan fel."""
+    at = run_page(PAGES[5])
+    assert not at.exception, [str(e) for e in at.exception]
+    labels = {m.label for m in at.metric}
+    assert "MRR idag" in labels
+    assert len(at.dataframe) >= 1
