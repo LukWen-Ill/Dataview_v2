@@ -8,8 +8,15 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from src.dashboard import active_customers, filter_customers, revenue_forecast
-from src.data import TARGET_COLUMN
+from src.dashboard import (
+    GROUP_COLUMNS,
+    active_customers,
+    filter_customers,
+    group_breakdown,
+    kpis,
+    revenue_forecast,
+)
+from src.data import TARGET_COLUMN, TENURE_LABELS
 from tests.conftest import make_raw_df
 
 
@@ -170,3 +177,92 @@ def test_revenue_forecast_utan_aktiva_kunder_ger_valueerror(three_customers):
     three_customers[TARGET_COLUMN] = "Yes"
     with pytest.raises(ValueError, match="aktiva"):
         revenue_forecast(three_customers, start=START)
+
+
+def test_kpis_stammer_med_revenue_forecast(customers):
+    result = kpis(customers)
+    forecast = revenue_forecast(customers, start=START)
+    assert result["mrr_today"] == forecast.loc[0, "expected_mrr"]
+    assert result["expected_loss_next_month"] == forecast.loc[1, "expected_loss"]
+
+
+def test_kpis_returnerar_vanliga_python_typer(customers):
+    result = kpis(customers)
+    assert set(result) == {
+        "mrr_today",
+        "expected_loss_next_month",
+        "actual_loss_last_month",
+        "predicted_churn_rate",
+        "n_customers",
+    }
+    assert type(result["n_customers"]) is int
+    for key in result.keys() - {"n_customers"}:
+        assert type(result[key]) is float
+
+
+def test_kpis_faktisk_forlust_bara_pa_churnade(three_customers):
+    churned = pd.DataFrame(
+        {"MonthlyCharges": [9999.0], "churn_probability": [0.0], TARGET_COLUMN: ["Yes"]}
+    )
+    result = kpis(pd.concat([three_customers, churned], ignore_index=True))
+    assert result["actual_loss_last_month"] == 9999.0
+    assert result["mrr_today"] == 170.0  # den churnade kunden ingår inte
+    assert result["n_customers"] == 3
+    assert result["predicted_churn_rate"] == pytest.approx(0.2)  # (0.5 + 0.1 + 0.0) / 3
+    assert result["expected_loss_next_month"] == pytest.approx(55.0)  # 100*0.5 + 50*0.1
+
+
+def test_kpis_utan_aktiva_kunder_ger_valueerror(three_customers):
+    three_customers[TARGET_COLUMN] = "Yes"
+    with pytest.raises(ValueError, match="aktiva"):
+        kpis(three_customers)
+
+
+def test_group_breakdown_kolumner_och_sortering(customers):
+    result = group_breakdown(customers, "Contract")
+    assert list(result.columns) == [
+        "Contract",
+        "antal_kunder",
+        "mrr",
+        "predikterad_churn",
+        "forvantad_forlust_nasta_manad",
+    ]
+    loss = result["forvantad_forlust_nasta_manad"]
+    assert loss.is_monotonic_decreasing
+    assert list(result.index) == list(range(len(result)))
+
+
+def test_group_breakdown_summerar_till_kpis(customers):
+    result = group_breakdown(customers, "InternetService")
+    totals = kpis(customers)
+    assert result["antal_kunder"].sum() == totals["n_customers"]
+    assert result["mrr"].sum() == pytest.approx(totals["mrr_today"])
+    assert result["forvantad_forlust_nasta_manad"].sum() == pytest.approx(
+        totals["expected_loss_next_month"]
+    )
+
+
+def test_group_breakdown_predikterad_churn_ar_gruppens_medel(customers):
+    result = group_breakdown(customers, "Contract").set_index("Contract")
+    active = active_customers(customers)
+    for contract in active["Contract"].unique():
+        expected = active.loc[active["Contract"] == contract, "churn_probability"].mean()
+        assert result.loc[contract, "predikterad_churn"] == pytest.approx(expected)
+
+
+def test_group_breakdown_fungerar_pa_tenure_group(customers):
+    result = group_breakdown(customers, "tenure_group")
+    assert set(result["tenure_group"]) <= set(TENURE_LABELS)
+    assert result["antal_kunder"].sum() == len(active_customers(customers))
+
+
+def test_group_breakdown_otillaten_kolumn_ger_keyerror(customers):
+    assert "gender" in customers.columns and "gender" not in GROUP_COLUMNS
+    with pytest.raises(KeyError, match="gender"):
+        group_breakdown(customers, "gender")
+
+
+def test_group_breakdown_utan_aktiva_kunder_ger_valueerror(customers):
+    customers[TARGET_COLUMN] = "Yes"
+    with pytest.raises(ValueError, match="aktiva"):
+        group_breakdown(customers, "Contract")

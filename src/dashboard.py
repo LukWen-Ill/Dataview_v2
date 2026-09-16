@@ -11,7 +11,10 @@ from datetime import date
 
 import pandas as pd
 
-from src.data import TARGET_COLUMN
+from src.data import TARGET_COLUMN, add_features, clean
+
+# Kolumner som Ledning-sidan får gruppera på. tenure_group skapas av add_features.
+GROUP_COLUMNS = ["Contract", "InternetService", "PaymentMethod", "tenure_group"]
 
 # Hårdkodade svenska månadsnamn. strftime("%b") beror på systemets locale och ger "Oct" på CI.
 MONTH_NAMES_SV = [
@@ -104,3 +107,42 @@ def revenue_forecast(df: pd.DataFrame, months: int = 24, start: date | None = No
     out["expected_loss"] = (out["expected_mrr"].shift(1) - out["expected_mrr"]).fillna(0.0)
     out["cumulative_loss"] = out["expected_mrr"].iloc[0] - out["expected_mrr"]
     return out
+
+
+def kpis(df: pd.DataFrame) -> dict:
+    """Nyckeltal för Ledning-sidan. Vanliga Python-typer så att st.metric och json fungerar.
+
+    Allt utom actual_loss_last_month räknas på aktiva kunder. actual_loss_last_month är
+    månadsintäkten från de kunder som redan lämnat (Churn = Yes).
+    """
+    active = active_customers(df)
+    forecast = revenue_forecast(df, months=1)  # ValueError om inga aktiva kunder
+    churned = df.loc[df[TARGET_COLUMN] == "Yes"]
+    return {
+        "mrr_today": float(active["MonthlyCharges"].sum()),
+        "expected_loss_next_month": float(forecast.loc[1, "expected_loss"]),
+        "actual_loss_last_month": float(churned["MonthlyCharges"].sum()),
+        "predicted_churn_rate": float(active["churn_probability"].mean()),
+        "n_customers": int(len(active)),
+    }
+
+
+def group_breakdown(df: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Antal, MRR, predikterad churn och förväntad förlust nästa månad per kategori i column.
+
+    Bara aktiva kunder. Förväntad förlust nästa månad är Σ MonthlyCharges × p per grupp,
+    alltså samma sak som expected_loss vid m = 1 i revenue_forecast. Sorterad fallande på den.
+    """
+    if column not in GROUP_COLUMNS:
+        raise KeyError(f"Kolumnen {column!r} går inte att gruppera på, välj bland {GROUP_COLUMNS}")
+    active = active_customers(add_features(clean(df)))  # tenure_group finns först efter detta
+    if active.empty:
+        raise ValueError("Inga aktiva kunder att gruppera")
+    active["forvantad_forlust_nasta_manad"] = active["MonthlyCharges"] * active["churn_probability"]
+    grouped = active.groupby(column, observed=True).agg(
+        antal_kunder=("MonthlyCharges", "size"),
+        mrr=("MonthlyCharges", "sum"),
+        predikterad_churn=("churn_probability", "mean"),
+        forvantad_forlust_nasta_manad=("forvantad_forlust_nasta_manad", "sum"),
+    )
+    return grouped.sort_values("forvantad_forlust_nasta_manad", ascending=False).reset_index()
