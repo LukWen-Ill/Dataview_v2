@@ -1,134 +1,67 @@
-"""Streamlit-app för churn-prediktion. Kör: streamlit run app.py"""
+"""Streamlit-appens startsida: översikt. Kör: streamlit run app.py
+
+Övriga sidor ligger i pages/. All ML-logik ligger i src/ - sidorna visar bara resultat.
+"""
 
 from __future__ import annotations
 
-import altair as alt
 import pandas as pd
 import streamlit as st
 
-from src.data import (
-    CATEGORICAL_COLUMNS,
-    DEFAULT_DATA_PATH,
-    FEATURE_COLUMNS,
-    NUMERIC_COLUMNS,
-    TARGET_COLUMN,
-    SchemaError,
-    clean,
-    load_dataset,
-    load_raw,
-)
-from src.model import predict_proba, train
+from app_helpers import get_customers, get_results, load_or_stop, metrics_row
+from src.data import TARGET_COLUMN
 
 st.set_page_config(page_title="Churn-prediktion", page_icon="📉", layout="wide")
 
+customers = load_or_stop(get_customers, "kunddatan")
+results = load_or_stop(get_results, "träningsresultatet")
 
-@st.cache_data
-def get_raw() -> pd.DataFrame:
-    return load_raw(DEFAULT_DATA_PATH)
+st.title("📉 Churn-prediktion – Telco Customer Churn")
+st.caption(
+    "Vilka kunder riskerar att säga upp sitt abonnemang? "
+    "Data i SQLite → scikit-learn-pipeline → Streamlit."
+)
 
+churn_rate = (customers[TARGET_COLUMN] == "Yes").mean()
+c1, c2, c3, c4 = st.columns(4)
+c1.metric("Kunder i databasen", f"{len(customers):,}".replace(",", " "), border=True)
+c2.metric("Churn-andel", f"{churn_rate:.1%}", border=True)
+c3.metric("Vald modell", results["best_model"], border=True)
+c4.metric("Tränad", results["created_at"][:10], border=True)
 
-@st.cache_resource
-def get_model():
-    """Tränar vid första anropet och cachar. Tar under en sekund på 7 000 rader."""
-    X, y = load_dataset(DEFAULT_DATA_PATH)
-    return train(X, y)
+st.subheader("Slutmodellen på testmängden")
+st.caption(
+    f"{results['split']['n_test']} kunder som modellen aldrig sett under träning eller modellval. "
+    "Threshold 0,5."
+)
+metrics_row(results["test"])
 
+st.subheader("Modelljämförelse på valideringsmängden")
+table = pd.DataFrame(
+    [
+        {"Modell": m["model"], "CV ROC-AUC": m["cv_roc_auc"], **m["validation"]}
+        for m in results["models"]
+    ]
+).set_index("Modell")
+st.dataframe(table.style.format("{:.3f}").highlight_max(axis=0, color="#d4edda"), width="stretch")
 
-try:
-    raw = get_raw()
-    pipeline, metrics = get_model()
-except (FileNotFoundError, SchemaError) as err:
-    st.error(f"Kunde inte starta appen: {err}")
-    st.stop()
+st.subheader("Så här hänger det ihop")
+st.markdown(
+    f"""
+1. **Data** – rå-CSV:n laddas in i SQLite (`data/churn.db`). Appen och träningen läser därifrån.
+2. **Feature engineering** – tre härledda kolumner: antal tilläggstjänster, snittkostnad per månad
+   och kundtid i grupper.
+3. **Split** – stratifierat i {results["split"]["n_train"]} train /
+   {results["split"]["n_validation"]} validation / {results["split"]["n_test"]} test.
+4. **Modeller** – logistisk regression, beslutsträd och random forest, alla i samma pipeline med
+   imputering, skalning och one-hot. Hyperparametrar väljs med GridSearchCV
+   ({results["cv_folds"]}-delad korsvalidering på train, scoring = {results["scoring"]}).
+5. **Modellval** – på validation. Slutmodellen tränas om på train + validation och utvärderas
+   en enda gång på test.
+6. **Prediktion** – appen laddar `models/churn_model.joblib`, du väljer threshold och varje
+   prediktion loggas i databasen.
 
-st.title("📉 Churn-prediktion")
-st.caption("Telco Customer Churn · logistisk regression · scikit-learn")
-
-data_tab, model_tab, predict_tab = st.tabs(["Data", "Modell", "Prediktera"])
-
-with data_tab:
-    churn_rate = (raw[TARGET_COLUMN] == "Yes").mean()
-    c1, c2, c3 = st.columns(3)
-    c1.metric("Kunder", f"{len(raw):,}".replace(",", " "))
-    c2.metric("Churn-andel", f"{churn_rate:.1%}")
-    c3.metric("Kolumner", len(raw.columns))
-
-    st.subheader("Churn per avtalstyp")
-    by_contract = (
-        raw.assign(churn=(raw[TARGET_COLUMN] == "Yes").astype(int))
-        .groupby("Contract", as_index=False)["churn"]
-        .mean()
-    )
-    st.altair_chart(
-        alt.Chart(by_contract)
-        .mark_bar()
-        .encode(
-            x=alt.X("Contract:N", title="Avtal", sort="-y"),
-            y=alt.Y("churn:Q", title="Churn-andel", axis=alt.Axis(format="%")),
-            tooltip=[alt.Tooltip("churn:Q", format=".1%", title="Churn")],
-        ),
-        use_container_width=True,
-    )
-
-    st.subheader("Rådata")
-    st.dataframe(raw.head(100), use_container_width=True)
-
-with model_tab:
-    st.subheader("Utvärdering på hållet testset")
-    c1, c2, c3 = st.columns(3)
-    c1.metric("ROC-AUC", f"{metrics.roc_auc:.3f}")
-    c2.metric("Recall", f"{metrics.recall:.3f}")
-    c3.metric("Precision", f"{metrics.precision:.3f}")
-    c1.metric("Träffsäkerhet", f"{metrics.accuracy:.3f}")
-    c2.metric("F1", f"{metrics.f1:.3f}")
-    c3.metric("Rader (träning/test)", f"{metrics.n_train} / {metrics.n_test}")
-    st.info(
-        "Modellen är viktad mot minoritetsklassen (`class_weight='balanced'`). "
-        "Det ger högre recall - den hittar fler churnare - till priset av lägre precision."
-    )
-
-with predict_tab:
-    single, batch = st.tabs(["En kund", "Ladda upp CSV"])
-
-    with single:
-        cleaned = clean(raw)
-        with st.form("kund"):
-            cols = st.columns(3)
-            values: dict[str, object] = {}
-            for i, col in enumerate(NUMERIC_COLUMNS):
-                series = cleaned[col].dropna()
-                values[col] = cols[i % 3].number_input(
-                    col,
-                    min_value=float(series.min()),
-                    max_value=float(series.max()),
-                    value=float(series.median()),
-                )
-            for i, col in enumerate(CATEGORICAL_COLUMNS):
-                options = sorted(raw[col].dropna().unique())
-                values[col] = cols[i % 3].selectbox(col, options)
-            submitted = st.form_submit_button("Prediktera")
-
-        if submitted:
-            proba = predict_proba(pipeline, pd.DataFrame([values])[FEATURE_COLUMNS]).iloc[0]
-            st.metric("Sannolikhet för churn", f"{proba:.1%}")
-            st.progress(float(proba))
-
-    with batch:
-        uploaded = st.file_uploader("CSV med samma kolumner som datasettet", type="csv")
-        if uploaded is not None:
-            try:
-                df = clean(pd.read_csv(uploaded))
-                result = df.assign(churn_probability=predict_proba(pipeline, df))
-            except (SchemaError, ValueError) as err:
-                st.error(f"Filen gick inte att prediktera på: {err}")
-            else:
-                st.dataframe(
-                    result.sort_values("churn_probability", ascending=False),
-                    use_container_width=True,
-                )
-                st.download_button(
-                    "Ladda ner resultat",
-                    result.to_csv(index=False).encode("utf-8"),
-                    "churn_predictions.csv",
-                    "text/csv",
-                )
+Använd menyn till vänster: **Data** (EDA), **Modeller** (utvärdering, threshold, feature
+importance), **Segmentering** (K-Means + PCA) och **Prediktera**.
+"""
+)

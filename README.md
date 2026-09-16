@@ -1,138 +1,199 @@
-# Churn-prediktion
+# Churn-prediktion – Telco Customer Churn
 
-Fullstack-app som räknar ut hur sannolikt det är att en telekomkund säger upp sitt abonnemang.
-Data → scikit-learn-modell → Streamlit-gränssnitt, med tester och CI/CD.
+Fullstack-ML-projekt som förutsäger vilka telekomkunder som riskerar att säga upp sitt
+abonnemang. Data lagras i SQLite, modelleringen görs med scikit-learn och resultatet
+presenteras i en Streamlit-app.
 
 ![CI](https://github.com/LukWen-Ill/Dataview_v2/actions/workflows/ci.yml/badge.svg)
 
-## Vad appen gör
+Projektarbete Del 2 i kursen *AI – teori och tillämpning, del 1* (NBI/Handelsakademin).
 
-"Churn" betyder att en kund lämnar. Appen tittar på vad vi vet om en kund - hur länge hen
-varit kund, vilket avtal hen har, vad hen betalar per månad, vilka tjänster hen använder -
-och svarar med en sannolikhet mellan 0 och 100 %.
+## Vad projektet gör
 
-Tre flikar:
-- **Data** - hur många kunder, hur stor andel som lämnar, churn per avtalstyp.
-- **Modell** - hur bra modellen är, mätt på data den aldrig sett under träningen.
-- **Prediktera** - fyll i en kund för hand, eller ladda upp en CSV med många kunder och få
-  tillbaka en lista sorterad på risk.
+"Churn" betyder att en kund lämnar. Appen svarar på två frågor:
 
-## Data
+- **Vilka kunder riskerar att lämna?** – en klassificeringsmodell ger en sannolikhet per kund.
+  Användaren väljer threshold och ser hur avvägningen mellan precision och recall ändras.
+- **Vilka typer av kunder har vi?** – K-Means grupperar kunderna i segment som sedan
+  tolkas med churn-andel per segment.
 
-`data/raw/telco_churn.csv` - IBM:s "Telco Customer Churn", 7 043 kunder och 21 kolumner.
-26,5 % av kunderna har lämnat. Filen ligger i repot (977 KB).
+Hela flödet:
 
-Kolumnen `Churn` (`Yes`/`No`) är det vi försöker förutsäga. `customerID` används inte som
-feature - ett kundnummer säger inget om beteende.
+```
+CSV  →  SQLite  →  rensning + feature engineering  →  train / validation / test
+     →  3 modeller i sklearn-Pipeline + GridSearchCV  →  modellval på validation
+     →  utvärdering på test  →  joblib  →  Streamlit  →  prediktioner loggas i SQLite
+```
 
-## Modell
+## Dataset
 
-En `Pipeline` i scikit-learn med två steg:
+`data/raw/telco_churn.csv` – IBM:s [Telco Customer Churn](https://www.kaggle.com/datasets/blastchar/telco-customer-churn):
+7 043 kunder, 21 kolumner. Target är `Churn` (Yes/No), 26,5 % av kunderna har lämnat.
+`customerID` används inte som feature.
 
-1. **Förbehandling.** Numeriska kolumner medianimputeras och skalas. Kategoriska kolumner
-   one-hot-kodas med `handle_unknown="ignore"`, så att en avtalstyp modellen aldrig sett
-   förut ger en prediktion i stället för en krasch.
-2. **Logistisk regression** med `class_weight="balanced"`.
+Tre härledda kolumner skapas i `src/data.py` (`add_features`):
 
-Resultat på testmängden (20 % av datan, som modellen aldrig tränats på):
+| Kolumn | Vad | Varför |
+|---|---|---|
+| `num_addon_services` | Antal tilläggstjänster (0–6) | En kund med många tjänster är mer inlåst |
+| `avg_monthly_charge` | `TotalCharges / tenure` | Fångar om priset ändrats över kundtiden |
+| `tenure_group` | Kundtid i grupper (0–12, 13–24, 25–48, 49+) | Churn är koncentrerad till första året |
 
-| Mått | Värde |
-|---|---|
-| ROC-AUC | 0,84 |
-| Recall | 0,78 |
-| Precision | 0,50 |
-| Träffsäkerhet | 0,74 |
+## ML-problem
 
-Recall är medvetet prioriterad: det kostar mer att missa en kund som är på väg att lämna än
-att kontakta en kund som ändå hade stannat.
+Binär klassificering med obalanserade klasser. Accuracy räcker därför inte: en modell som
+alltid svarar "stannar" får 73 % rätt. Vi jämför modellerna på **precision, recall, F1 och
+ROC-AUC** och resonerar utifrån affärsperspektivet att en missad churnare kostar mer än en
+onödig kontakt. Därför används `class_weight="balanced"` i alla modeller.
 
-## Kom igång
+## Tech stack
+
+Python 3.11+, pandas, scikit-learn, SQLite (`sqlite3` i standardbiblioteket), joblib,
+Streamlit, Altair, matplotlib. Tester med pytest, lint med ruff, CI på GitHub Actions.
+
+## Projektstruktur
+
+```
+data/raw/telco_churn.csv   rådata
+data/churn.db              SQLite (byggs med python -m src.db, versionshanteras inte)
+models/                    tränad modell + resultat (versionshanteras så appen startar direkt)
+  churn_model.joblib         slutmodellen (hela pipelinen)
+  results.json               jämförelse på validation, bästa params, testresultat
+  test_predictions.csv       slutmodellens sannolikheter på testmängden
+src/data.py                inläsning, schemavalidering, rensning, feature engineering
+src/db.py                  SQLite: tabeller customers, model_runs, predictions
+src/features.py            ColumnTransformer: imputering, skalning, one-hot
+src/models.py              de tre modellerna och deras hyperparametergrids
+src/train.py               hela träningsflödet – börja läsa här
+src/evaluate.py            metrics, threshold-tabell, confusion matrix, ROC, feature importance
+src/segment.py             K-Means, elbow/silhouette, PCA, segmentprofiler
+src/eda.py                 aggregeringar för EDA-sidan
+app.py                     Streamlit: startsida (översikt)
+pages/                     Streamlit: Data, Modeller, Segmentering, Prediktera
+app_helpers.py             cachade laddningsfunktioner för sidorna
+tests/                     pytest (124 tester)
+docs/rapport.md            teknisk rapport
+.github/workflows/ci.yml   CI
+```
+
+## Installation
 
 ```bash
 git clone https://github.com/LukWen-Ill/Dataview_v2.git
 cd Dataview_v2
 
 python -m venv .venv
-.venv\Scripts\activate          # Windows
+.venv\Scripts\activate          # Windows (Git Bash: source .venv/Scripts/activate)
 source .venv/bin/activate       # macOS/Linux
 
 pip install -r requirements-dev.txt
 ```
 
-Kör appen:
+## Databas
+
+Databasen byggs från CSV:n med ett kommando:
 
 ```bash
-streamlit run app.py
+python -m src.db
 ```
 
-Träna modellen från kommandoraden (skriver metrics som JSON och sparar `models/churn_model.joblib`):
+Det skapar `data/churn.db` med tre tabeller:
+
+| Tabell | Innehåll |
+|---|---|
+| `customers` | Rådatan, en rad per kund |
+| `model_runs` | En rad per utvärderad modell varje gång träningen körs (params + metrics som JSON) |
+| `predictions` | En rad per prediktion som görs i appen (indata, sannolikhet, threshold, beslut) |
+
+Appen och träningsskriptet bygger databasen automatiskt om den saknas.
+
+## Träning
 
 ```bash
 python -m src.train
 ```
 
-## Tester
+Tar cirka 20–30 sekunder och gör följande (se `src/train.py`):
+
+1. Läser kunderna från SQLite.
+2. Delar stratifierat i 60 % train / 20 % validation / 20 % test.
+3. Kör `GridSearchCV` (5-delad korsvalidering, scoring ROC-AUC) på train för logistisk
+   regression, beslutsträd och random forest.
+4. Jämför de tre på validation och väljer den med högst ROC-AUC.
+5. Tränar om den valda modellen på train + validation.
+6. Utvärderar en enda gång på test.
+7. Sparar `models/churn_model.joblib`, `models/results.json`, `models/test_predictions.csv`
+   och loggar alla körningar i tabellen `model_runs`.
+
+Den tränade modellen är incheckad i repot, så appen fungerar direkt efter klon.
+Träna om när koden i `src/` ändras.
+
+## Streamlit
 
 ```bash
-pytest --cov=src
+streamlit run app.py
 ```
 
-59 tester. Uppsättningen är byggd för att aldrig passera tyst:
+Appen laddar den sparade modellen – den tränar aldrig själv. Saknas modellen visas ett
+felmeddelande med träningskommandot.
 
-- `filterwarnings = error` - en varning från vår egen kod failar bygget.
-- `--strict-markers --strict-config` och `xfail_strict = true`.
-- Täckningsgräns på 90 % (`fail_under` i `pyproject.toml`).
-- Inga `continue-on-error` eller `|| true` i CI.
-
-Felfall som testas, inte bara happy path:
-
-| Vad som går fel | Förväntat beteende |
+| Sida | Innehåll |
 |---|---|
-| Datafilen saknas | `FileNotFoundError` med sökvägen i meddelandet |
-| Kolumn saknas | `SchemaError` som listar exakt vilka |
-| Tom dataram | `SchemaError` |
-| `Churn` innehåller `"Kanske"` | `SchemaError` som namnger värdet |
-| `TotalCharges` är `" "` eller skräptext | blir `NaN`, imputeras - kraschar inte |
-| Okänd kategori vid prediktion (`PaymentMethod = "Swish"`) | kodas som nollor, ger ändå en sannolikhet |
-| Targeten har bara en klass | `ValueError` |
-| `X` och `y` har olika längd | `ValueError` |
-| Modellfil saknas | `FileNotFoundError` som säger hur man tränar |
-| Streamlit-appen startar utan data | rött felmeddelande, inte en stacktrace |
+| Översikt | Antal kunder, churn-andel, vald modell, testresultat, modelljämförelse |
+| Data | EDA: churn per kategori, kundtid, månadskostnad, korrelationer |
+| Modeller | Jämförelse på validation, slutresultat på test, threshold-slider med confusion matrix, ROC-kurva, classification report, feature importance |
+| Segmentering | Elbow och silhouette, K-Means-kluster i PCA-rummet, segmentprofiler med churn-andel |
+| Prediktera | En kund via formulär (loggas i databasen) eller många via CSV, med valbar threshold |
 
-Appen röktestas med Streamlits `AppTest`, som kör hela `app.py` och failar på varje
-oväntat undantag.
+## Tester och lint
 
-## CI/CD
-
-`.github/workflows/ci.yml` kör på varje push till `main` och varje pull request:
-
-1. **lint** - `ruff check` och `ruff format --check`.
-2. **test** - `pytest --cov=src` på Python 3.11 och 3.12.
-3. **train** - kör `python -m src.train` end-to-end och laddar upp modellen som artifact.
-   Körs bara om testerna är gröna.
-
-**CD:** Streamlit Community Cloud är kopplad till `main` och deployar om automatiskt vid
-varje merge. Koppling görs en gång på [share.streamlit.io](https://share.streamlit.io):
-peka på repot `LukWen-Ill/Dataview_v2`, branch `main`, main file `app.py`, Python 3.11.
-
-## Arbetsflöde
-
-Basic branching:
-
-```
-main                 alltid deploybar
- └─ feature/xyz      allt arbete, in via PR, CI måste vara grön
+```bash
+pytest --cov=src                        # 124 tester, täckningskrav 90 %
+ruff check . && ruff format --check .
 ```
 
-## Projektstruktur
+Testsviten är byggd för att inte passera tyst: `filterwarnings = error`, `--strict-markers`,
+`xfail_strict`, inga `continue-on-error` i CI. Felfall testas, inte bara happy path: saknad
+fil, saknad kolumn, tom dataram, ogiltig target, okänd kategori vid prediktion, saknade
+värden, threshold utanför 0–1, för få kluster, saknad modell och saknad databas i appen.
 
-```
-data/raw/telco_churn.csv   rådata
-src/data.py                inläsning, schemavalidering, rensning
-src/features.py            förbehandling
-src/model.py               pipeline, träning, metrics, spara/ladda
-src/train.py               CLI
-app.py                     Streamlit-entrypoint
-tests/                     pytest
-.github/workflows/ci.yml   CI
-```
+## Git och GitHub
+
+`main` är alltid körbar. Allt arbete sker på feature-branches (`feature/<namn>`) och går in
+via pull request. CI kör lint, tester (Python 3.11 och 3.12) samt en end-to-end-träning på
+varje PR, och måste vara grön före merge.
+
+## Resultat
+
+Modelljämförelse på valideringsmängden (1 409 kunder, threshold 0,5):
+
+| Modell | CV ROC-AUC | Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|---|---|
+| Logistisk regression (C=10) | 0,849 | 0,748 | 0,517 | 0,786 | 0,624 | 0,838 |
+| Beslutsträd (depth 5) | 0,819 | 0,740 | 0,506 | 0,786 | 0,616 | 0,817 |
+| **Random forest** (200 träd, depth 10) | 0,847 | 0,754 | 0,524 | 0,775 | 0,626 | **0,838** |
+
+Random forest valdes (marginellt högst ROC-AUC på validation). Slutmodellen på
+**testmängden** (1 409 kunder som aldrig använts för träning eller modellval):
+
+| Accuracy | Precision | Recall | F1 | ROC-AUC |
+|---|---|---|---|---|
+| 0,759 | 0,532 | 0,783 | 0,634 | 0,841 |
+
+Modellen hittar alltså 78 % av de kunder som faktiskt lämnar, till priset av att ungefär
+hälften av de flaggade kunderna inte hade lämnat. Med threshold 0,3 stiger recall till 91 %
+(781 kunder flaggas, 35 churnare missas); med 0,7 sjunker den till 53 % (305 flaggas, 177
+missas). Viktigaste features: `Contract_Month-to-month`, `tenure`, `TotalCharges`,
+`avg_monthly_charge`, `OnlineSecurity_No`.
+
+Segmenteringen (k = 4) ger bland annat ett segment med månadsavtal, hög månadskostnad och få
+tilläggstjänster där 56 % churnar, mot 7 % i segmentet med billiga tvåårsavtal.
+
+## Kända begränsningar
+
+- Modellerna ligger nära varandra; logistisk regression är nästan lika bra som random
+  forest och enklare att tolka. Valet gjordes strikt på validerings-ROC-AUC.
+- SQLite-databasen är lokal. På Streamlit Community Cloud byggs den om vid varje start, så
+  loggade prediktioner där är flyktiga.
+- Datasettet är ett tvärsnitt utan tidsstämplar, så vi kan inte utvärdera modellen "framåt i
+  tiden" som man skulle göra i drift.
