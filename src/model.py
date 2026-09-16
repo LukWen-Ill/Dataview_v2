@@ -1,102 +1,25 @@
-"""Träning, utvärdering och persistens av churn-modellen."""
+"""Spara, ladda och prediktera med den tränade modellen (joblib)."""
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import joblib
 import pandas as pd
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import (
-    accuracy_score,
-    f1_score,
-    precision_score,
-    recall_score,
-    roc_auc_score,
-)
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
-from src.data import FEATURE_COLUMNS, validate
-from src.features import build_preprocessor
+from src.data import prepare_features, validate
 
-DEFAULT_MODEL_PATH = Path(__file__).resolve().parents[1] / "models" / "churn_model.joblib"
-RANDOM_STATE = 42
-TEST_SIZE = 0.2
+MODELS_DIR = Path(__file__).resolve().parents[1] / "models"
+DEFAULT_MODEL_PATH = MODELS_DIR / "churn_model.joblib"
 
 
-@dataclass(frozen=True)
-class Metrics:
-    """Utvärdering på testmängden."""
-
-    accuracy: float
-    precision: float
-    recall: float
-    f1: float
-    roc_auc: float
-    n_train: int
-    n_test: int
-
-    def as_dict(self) -> dict[str, float]:
-        return asdict(self)
-
-
-def build_pipeline() -> Pipeline:
-    """Förbehandling + logistisk regression i en enda pipeline."""
-    return Pipeline(
-        [
-            ("preprocess", build_preprocessor()),
-            (
-                "classifier",
-                LogisticRegression(
-                    max_iter=1000,
-                    class_weight="balanced",
-                    random_state=RANDOM_STATE,
-                ),
-            ),
-        ]
-    )
-
-
-def train(
-    X: pd.DataFrame,
-    y: pd.Series,
-    *,
-    test_size: float = TEST_SIZE,
-    random_state: int = RANDOM_STATE,
-) -> tuple[Pipeline, Metrics]:
-    """Träna på en stratifierad split och utvärdera på hållet testset."""
-    if len(X) != len(y):
-        raise ValueError(f"X och y har olika längd: {len(X)} vs {len(y)}")
-    if y.nunique() < 2:
-        raise ValueError("Targeten har bara en klass - modellen går inte att träna.")
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state, stratify=y
-    )
-    pipeline = build_pipeline()
-    pipeline.fit(X_train, y_train)
-
-    y_pred = pipeline.predict(X_test)
-    y_proba = pipeline.predict_proba(X_test)[:, 1]
-    metrics = Metrics(
-        accuracy=float(accuracy_score(y_test, y_pred)),
-        precision=float(precision_score(y_test, y_pred, zero_division=0)),
-        recall=float(recall_score(y_test, y_pred, zero_division=0)),
-        f1=float(f1_score(y_test, y_pred, zero_division=0)),
-        roc_auc=float(roc_auc_score(y_test, y_proba)),
-        n_train=int(len(X_train)),
-        n_test=int(len(X_test)),
-    )
-    return pipeline, metrics
-
-
-def predict_proba(pipeline: Pipeline, X: pd.DataFrame) -> pd.Series:
-    """Sannolikhet för churn. Validerar att alla feature-kolumner finns."""
-    validate(X, require_target=False)
-    proba = pipeline.predict_proba(X[FEATURE_COLUMNS])[:, 1]
-    return pd.Series(proba, index=X.index, name="churn_probability")
+def predict_proba(pipeline: Pipeline, df: pd.DataFrame) -> pd.Series:
+    """Sannolikhet för churn per rad. Tar rådata (samma kolumner som CSV:n, utan Churn)."""
+    validate(df, require_target=False)
+    X = prepare_features(df)
+    proba = pipeline.predict_proba(X)[:, 1]
+    return pd.Series(proba, index=df.index, name="churn_probability")
 
 
 def save(pipeline: Pipeline, path: str | Path = DEFAULT_MODEL_PATH) -> Path:
