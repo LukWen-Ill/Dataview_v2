@@ -80,3 +80,29 @@ def test_app_stops_with_error_when_data_is_missing(monkeypatch, tmp_path):
     at = run_page(PAGES[0])
     assert not at.exception
     assert at.error and "Kunde inte ladda" in at.error[0].value
+
+
+def test_customers_with_predictions_matches_customers():
+    """churn_probability i [0, 1] och samma rader i samma ordning som get_customers()."""
+    from app_helpers import get_customers, get_customers_with_predictions
+
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    customers = get_customers()
+    result = get_customers_with_predictions()
+    assert "churn_probability" in result.columns
+    assert result["churn_probability"].between(0, 1).all()
+    assert len(result) == len(customers)
+    assert list(result["customerID"]) == list(customers["customerID"])
+
+
+def test_customers_with_predictions_raises_when_model_is_missing(monkeypatch, tmp_path):
+    """Saknad modell ska ge FileNotFoundError som load_or_stop fångar på sidan."""
+    import src.model as model_module
+    from app_helpers import get_customers_with_predictions
+
+    monkeypatch.setattr(model_module, "DEFAULT_MODEL_PATH", tmp_path / "finns-inte.joblib")
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    with pytest.raises(FileNotFoundError):
+        get_customers_with_predictions()
