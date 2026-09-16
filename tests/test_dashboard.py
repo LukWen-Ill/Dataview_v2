@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 import numpy as np
+import pandas as pd
 import pytest
 
-from src.dashboard import active_customers, filter_customers
+from src.dashboard import active_customers, filter_customers, revenue_forecast
 from src.data import TARGET_COLUMN
 from tests.conftest import make_raw_df
 
@@ -16,6 +19,21 @@ def customers():
     df = make_raw_df()
     df["churn_probability"] = np.linspace(0.0, 1.0, len(df))
     return df
+
+
+@pytest.fixture
+def three_customers():
+    """Tre aktiva kunder med handvalda värden så att (1 - p)^m kan räknas för hand."""
+    return pd.DataFrame(
+        {
+            "MonthlyCharges": [100.0, 50.0, 20.0],
+            "churn_probability": [0.5, 0.1, 0.0],
+            TARGET_COLUMN: ["No", "No", "No"],
+        }
+    )
+
+
+START = date(2026, 9, 16)
 
 
 def test_filter_customers_tom_dict_ger_alla_rader(customers):
@@ -69,3 +87,86 @@ def test_active_customers_ger_bara_churn_no(customers):
 def test_active_customers_utan_churn_kolumn_ger_keyerror(customers):
     with pytest.raises(KeyError, match=TARGET_COLUMN):
         active_customers(customers.drop(columns=[TARGET_COLUMN]))
+
+
+def test_revenue_forecast_ger_en_rad_per_manad_plus_start(customers):
+    result = revenue_forecast(customers, months=24, start=START)
+    assert len(result) == 25
+    assert list(result["months_ahead"]) == list(range(25))
+
+
+def test_revenue_forecast_rad_noll_ar_dagens_mrr(three_customers):
+    result = revenue_forecast(three_customers, months=3, start=START)
+    first = result.iloc[0]
+    assert first["expected_mrr"] == 170.0
+    assert first["expected_customers"] == 3.0
+    assert first["expected_loss"] == 0.0
+    assert first["cumulative_loss"] == 0.0
+
+
+def test_revenue_forecast_handraknade_varden(three_customers):
+    result = revenue_forecast(three_customers, months=2, start=START)
+    # m = 1: 100*0.5 + 50*0.9 + 20*1.0 = 115, kunder 0.5 + 0.9 + 1.0 = 2.4
+    assert result.loc[1, "expected_mrr"] == pytest.approx(115.0)
+    assert result.loc[1, "expected_customers"] == pytest.approx(2.4)
+    assert result.loc[1, "expected_loss"] == pytest.approx(170.0 - 115.0)
+    # m = 2: 100*0.25 + 50*0.81 + 20*1.0 = 85.5, kunder 0.25 + 0.81 + 1.0 = 2.06
+    assert result.loc[2, "expected_mrr"] == pytest.approx(85.5)
+    assert result.loc[2, "expected_customers"] == pytest.approx(2.06)
+    assert result.loc[2, "expected_loss"] == pytest.approx(115.0 - 85.5)
+    assert result.loc[2, "cumulative_loss"] == pytest.approx(170.0 - 85.5)
+
+
+def test_revenue_forecast_ignorerar_churnade_kunder(three_customers):
+    churned = pd.DataFrame(
+        {"MonthlyCharges": [9999.0], "churn_probability": [0.0], TARGET_COLUMN: ["Yes"]}
+    )
+    with_churned = pd.concat([three_customers, churned], ignore_index=True)
+    expected = revenue_forecast(three_customers, months=6, start=START)
+    result = revenue_forecast(with_churned, months=6, start=START)
+    pd.testing.assert_frame_equal(result, expected)
+
+
+def test_revenue_forecast_identiteter(customers):
+    result = revenue_forecast(customers, months=12, start=START)
+    mrr = result["expected_mrr"]
+    loss = result["expected_loss"]
+    for m in range(1, 13):
+        assert loss[m] == pytest.approx(mrr[m - 1] - mrr[m])
+        assert result.loc[m, "cumulative_loss"] == pytest.approx(loss[1 : m + 1].sum())
+
+
+def test_revenue_forecast_manader_pa_svenska_fran_start(three_customers):
+    result = revenue_forecast(three_customers, months=4, start=START)
+    assert result.loc[0, "month"] == pd.Timestamp("2026-09-01")
+    assert result.loc[1, "month"] == pd.Timestamp("2026-10-01")
+    assert list(result["month_label"]) == [
+        "Sep 2026",
+        "Okt 2026",
+        "Nov 2026",
+        "Dec 2026",
+        "Jan 2027",
+    ]
+
+
+@pytest.mark.parametrize("column", ["churn_probability", "MonthlyCharges"])
+def test_revenue_forecast_saknad_kolumn_ger_keyerror(three_customers, column):
+    with pytest.raises(KeyError, match=column):
+        revenue_forecast(three_customers.drop(columns=[column]), start=START)
+
+
+def test_revenue_forecast_sannolikhet_utanfor_intervall_ger_valueerror(three_customers):
+    three_customers.loc[0, "churn_probability"] = 1.5
+    with pytest.raises(ValueError, match="churn_probability"):
+        revenue_forecast(three_customers, start=START)
+
+
+def test_revenue_forecast_months_under_ett_ger_valueerror(three_customers):
+    with pytest.raises(ValueError, match="months"):
+        revenue_forecast(three_customers, months=0, start=START)
+
+
+def test_revenue_forecast_utan_aktiva_kunder_ger_valueerror(three_customers):
+    three_customers[TARGET_COLUMN] = "Yes"
+    with pytest.raises(ValueError, match="aktiva"):
+        revenue_forecast(three_customers, start=START)
