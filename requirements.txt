@@ -4,3 +4,4 @@ scikit-learn==1.9.1
 joblib==1.6.0
 streamlit==1.63.0
 altair==6.2.2
+matplotlib==3.10.9
