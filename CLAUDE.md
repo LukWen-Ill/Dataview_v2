@@ -1,77 +1,102 @@
 # CLAUDE.md
 
-Projektspecifika regler. Läses tillsammans med de globala reglerna i `~/.claude/CLAUDE.md`.
+Projektspecifika regler för Claude Code. Läs tillsammans med README.md.
 
 ## Vad projektet är
 
-Fullstack-app som predikterar kundchurn. Telco Customer Churn-datasettet (7 043 kunder,
-21 kolumner, 26,5 % churn) → scikit-learn-pipeline → Streamlit-gränssnitt.
+Studentprojekt (3 personer, betyg IG/G) i kursen "AI – teori och tillämpning, del 1":
+Projektarbete Del 2. Fullstack-ML-flöde som predikterar kundchurn på Telco Customer
+Churn-datasettet (7 043 kunder, 21 kolumner, 26,5 % churn).
 
-Inlämning KK2, kursen "Tillämpad maskininlärning med Python".
+Uppgiftens krav: data i databas, ML-modellering i Python, Streamlit-frontend, Git/GitHub,
+tydlig README, teknisk rapport (~3 sidor, `docs/rapport.md`).
+
+## Kodens nivå – viktigast av allt
+
+Studenterna ska kunna öppna `src/train.py` och förstå hela ML-flödet, och förklara varje del
+för utbildaren. Därför:
+
+- Enkel och tydlig kod före smart kod. Små funktioner, tydliga namn, kommentarer där de hjälper.
+- Inga onödiga abstraktionslager, design patterns eller "enterprise"-kod.
+- Kursbegreppen ska synas i koden: train/validation/test, stratifiering, k-fold CV,
+  GridSearchCV, Pipeline, confusion matrix, precision/recall/F1/ROC-AUC, threshold,
+  feature importance, PCA, K-Means, joblib.
+- Lägg inte till saker för att det ser avancerat ut. Det som inte krävs av uppgiften
+  markeras som "extra" och implementeras inte utan att fråga.
+- Vid konflikt mellan uppgift, kod och tester: fråga, gissa inte.
 
 ## Scope
 
 I scope:
-- Binär klassificering: churnar kunden eller inte.
-- Flera modeller i sklearn-`Pipeline`, tränade på `data/raw/telco_churn.csv` och jämförda på samma
-  split. Hyperparametertuning med `GridSearchCV` som del av träningen.
-- Streamlit-app med datautforskning, modellmetrics och prediktion (en kund + CSV-batch).
+- SQLite-databas (`data/churn.db`) med kunddata, loggade modellkörningar och prediktioner.
+- Binär klassificering med tre modeller (logistisk regression, beslutsträd, random forest)
+  i sklearn-`Pipeline`, små grids i `GridSearchCV` med 5-fold CV.
+- 60/20/20 stratifierad split. Testmängden används bara för slutlig utvärdering.
+- Streamlit med fem sidor: Översikt, Data (EDA), Modeller, Segmentering, Prediktera.
+- K-Means + PCA för kundsegmentering.
 - CI på GitHub Actions: lint, tester, end-to-end-träning.
-- CD: Streamlit Community Cloud deployar automatiskt från `main`.
 
-Utanför scope (lägg inte till utan att fråga):
-- Deep learning.
-- Databas, användarinloggning, API-lager, Docker.
+Utanför scope (fråga först):
+- Deep learning, SVM eller fler modeller.
+- Användarinloggning, API-lager, Docker, annan databas än SQLite.
 - Ommärkning eller schemaändringar av datasettet.
 
 ## Filstruktur
 
 ```
-data/raw/telco_churn.csv   rådata, versionshanterad (977 KB)
-src/data.py                inläsning, schemavalidering, rensning
-src/features.py            ColumnTransformer: skalning + one-hot
-src/model.py               pipeline, träning, metrics, spara/ladda
-src/train.py               CLI: python -m src.train
-.notebooks/                notebooks som redovisar träningen
-app.py                     Streamlit-entrypoint
+data/raw/telco_churn.csv   rådata, versionshanterad
+data/churn.db              SQLite, byggs av python -m src.db, gitignorerad
+models/                    churn_model.joblib, results.json, test_predictions.csv – versionshanterade
+src/data.py                inläsning, schemavalidering, rensning, feature engineering
+src/db.py                  SQLite-funktioner
+src/features.py            ColumnTransformer
+src/models.py              modellkatalog + grids
+src/train.py               hela träningsflödet (CLI: python -m src.train)
+src/evaluate.py            metrics, threshold, confusion matrix, ROC, feature importance
+src/segment.py             K-Means, PCA, segmentprofiler
+src/eda.py                 aggregeringar för EDA-sidan
+app.py, pages/, app_helpers.py   Streamlit – bara presentation
 tests/                     pytest
-.github/workflows/ci.yml   CI
+docs/rapport.md            teknisk rapport
 ```
 
 ## Arbetssätt
 
-- **Code-first.** All logik bor i `src/`. `app.py` är bara presentation - ingen ML-logik där.
-  Notebooks ligger i `.notebooks/` och redovisar träningen genom att importera från `src/` -
-  de är aldrig den enda platsen där en modell tränas.
-- **Basic branching.** `main` är skyddad i praktiken: allt arbete sker på feature-branch
-  (`feature/<kort-namn>`), går in via PR, och CI måste vara grön innan merge.
-- **Tester får inte passera tyst.** Konkret betyder det:
-  - `filterwarnings = error` i `pyproject.toml` - en varning failar bygget.
-  - `--strict-markers --strict-config`, `xfail_strict = true`.
-  - Täckningsgräns `fail_under = 90`.
-  - Inga `|| true`, inga `continue-on-error` i CI.
-  - Inga `pytest.skip` utan att skälet står i koden.
-- **Mer än happy path.** Varje ny funktion i `src/` ska ha minst ett test för felfallet:
-  saknad kolumn, tom dataram, ogiltigt targetvärde, okänd kategori vid prediktion,
-  saknade värden, fil som inte finns.
+- **Code-first.** All ML-logik i `src/`. `app.py`, `pages/` och `app_helpers.py` visar bara
+  resultat. Aggregeringar för grafer får ligga i `src/eda.py`.
+- **Alternativ A för modellen.** `python -m src.train` skapar `models/*` som checkas in.
+  Appen laddar den sparade modellen och kör aldrig GridSearchCV. Träna om och committa när
+  något i `src/` som påverkar modellen ändras.
+- **Basic branching.** Allt arbete på `feature/<kort-namn>`, in via PR, CI grön före merge.
+  Ändra aldrig `main` direkt. Små, begripliga commits.
+- **Tester får inte passera tyst.** `filterwarnings = error`, `--strict-markers`,
+  `--strict-config`, `xfail_strict = true`, `fail_under = 90`. Inga `|| true` eller
+  `continue-on-error` i CI. Inga `pytest.skip` utan skäl i koden.
+- **Mer än happy path.** Varje ny funktion i `src/` ska ha minst ett test för felfallet.
+- **Förklara kort** vid viktiga ändringar: vad, varför, hur det passar ML-flödet, vilket
+  kursbegrepp det motsvarar.
 
 ## Kommandon
 
 ```bash
-python -m venv .venv && .venv/Scripts/activate   # Windows
+python -m venv .venv && source .venv/Scripts/activate   # Windows (Git Bash)
 pip install -r requirements-dev.txt
 
-python -m src.train          # träna, skriv metrics, spara modell
-streamlit run app.py         # starta appen
-pytest --cov=src             # testa med täckningsgräns
+python -m src.db             # bygg data/churn.db från CSV:n
+python -m src.train          # träna, jämför, spara models/* och logga i databasen
+streamlit run app.py         # starta appen (laddar sparad modell)
+pytest --cov=src             # tester med täckningskrav
 ruff check . && ruff format --check .
 ```
 
-## Kända begränsningar
+## Kända begränsningar och beslut
 
-- Modellen tränas om vid appstart (cachas med `st.cache_resource`) i stället för att läsa en
-  incheckad `.joblib`. Det undviker versionskrockar mellan sklearn i repo och i molnet.
-  Träningen tar under en sekund på 7 000 rader.
-- `class_weight="balanced"` prioriterar recall framför precision - modellen hellre flaggar en
-  kund i onödan än missar en som faktiskt churnar.
-- 11 rader har tom `TotalCharges` (alla med `tenure = 0`). De blir `NaN` och medianimputeras.
+- `class_weight="balanced"` på alla modeller: churn är minoritetsklass och en missad
+  churnare kostar mer än en onödig kontakt. Ger högre recall, lägre precision.
+- GridSearchCV använder `scoring="roc_auc"` eftersom det är oberoende av threshold –
+  threshold väljs separat i appen.
+- Modellval sker på validation med ROC-AUC. Modellerna ligger nära varandra.
+- 11 rader har tom `TotalCharges` (alla med `tenure = 0`). De blir NaN, liksom
+  `avg_monthly_charge`, och medianimputeras i pipelinen.
+- Lokalt körs Python 3.14, CI kör 3.11/3.12. Paketen är exakt pinnade i `requirements.txt`.
+- Bokens PDF (kap 1–6) är bildbaserad utan textlager – läs den som bilder om den behövs.
