@@ -116,3 +116,20 @@ def test_ledning_page_shows_kpis_and_table():
     labels = {m.label for m in at.metric}
     assert "MRR idag" in labels
     assert len(at.dataframe) >= 1
+
+
+def test_ledning_page_has_segment_filter():
+    at = run_page(PAGES[5])
+    assert not at.exception, [str(e) for e in at.exception]
+    assert "Segment" in {m.label for m in at.multiselect}
+
+
+def test_segment_labels_match_customer_rows():
+    """Segmentetiketterna läggs på kundtabellen radvis, så längden måste stämma."""
+    from app_helpers import get_customers, get_segments
+    from src.segment import DEFAULT_K
+
+    st.cache_data.clear()
+    st.cache_resource.clear()
+    labels, _, _ = get_segments(DEFAULT_K)
+    assert len(labels) == len(get_customers())

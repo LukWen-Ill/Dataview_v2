@@ -5,22 +5,29 @@ from __future__ import annotations
 import altair as alt
 import streamlit as st
 
-from app_helpers import get_customers_with_predictions, load_or_stop
+from app_helpers import get_customers_with_predictions, get_segments, load_or_stop
 from src.dashboard import GROUP_COLUMNS, filter_customers, group_breakdown, kpis, revenue_forecast
+from src.segment import DEFAULT_K
 
 st.set_page_config(page_title="Ledning", page_icon="📈", layout="wide")
 st.title("📈 Ledning – intäktsprognos")
 
 customers = load_or_stop(get_customers_with_predictions, "kunddatan och modellen")
 
+# K-Means-segment som filter. Etiketterna ligger i samma radordning som kundtabellen,
+# så kolumnen måste läggas på hela tabellen här, innan någon filtrering ändrar ordningen.
+labels, _, _ = load_or_stop(lambda: get_segments(DEFAULT_K), "segmenten")
+customers = customers.assign(segment=labels)
+
 # Filter. Tom lista = inget filter, precis som filter_customers tolkar det.
 # Sista rutan styr tabellen längst ned; den ligger här så att alla anrop kan göras i ett svep.
-FILTER_COLUMNS = ["Contract", "InternetService", "PaymentMethod"]
-f1, f2, f3, f4 = st.columns(4)
+FILTER_COLUMNS = ["Contract", "InternetService", "PaymentMethod", "segment"]
+FILTER_LABELS = {"segment": "Segment"}  # övriga kolumner visas med sitt kolumnnamn
+f1, f2, f3, f4, f5 = st.columns(5)
 filters = {}
-for col, box in zip(FILTER_COLUMNS, (f1, f2, f3), strict=True):
-    filters[col] = box.multiselect(col, sorted(customers[col].unique()))
-group_column = f4.selectbox("Gruppera tabellen på", GROUP_COLUMNS, index=0)
+for col, box in zip(FILTER_COLUMNS, (f1, f2, f3, f4), strict=True):
+    filters[col] = box.multiselect(FILTER_LABELS.get(col, col), sorted(customers[col].unique()))
+group_column = f5.selectbox("Gruppera tabellen på", GROUP_COLUMNS, index=0)
 
 # Alla beräkningar sker i src/dashboard.py. Ett filter utan kunder ger ValueError.
 try:
