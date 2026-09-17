@@ -13,7 +13,8 @@ import pytest
 import streamlit as st
 from streamlit.testing.v1 import AppTest
 
-from src import db
+from src import actions, db
+from src.actions import suggest_actions
 from src.data import ADDON_SERVICES, RAW_FEATURE_COLUMNS, clean
 from src.labels import LABELS
 from src.model import load, predict_proba
@@ -30,7 +31,11 @@ PAGES = [
     ROOT / "pages" / "6_Saljverktyg.py",
 ]
 SALES_PAGE = PAGES[5]
-KNOWN_CUSTOMER_ID = "7590-VHVEG"  # första raden i CSV:n
+KNOWN_CUSTOMER_ID = "7590-VHVEG"  # första raden i CSV:n: månadsavtal, DSL, 1 månad, hög risk
+LOW_RISK_CUSTOMER_ID = "5575-GNVDE"  # ettårsavtal, DSL, 34 månader
+MEDIUM_RISK_CUSTOMER_ID = "6713-OKOMC"  # månadsavtal, DSL, 10 månader
+NO_INTERNET_CUSTOMER_ID = "1066-JKSGK"  # bara telefoni, månadsavtal, 1 månad
+AUTO_PAYMENT_CANDIDATE_ID = "5067-XJQFU"  # ettårsavtal, fiber, elektronisk check
 
 # En ny fiberkund på månadsavtal utan tillägg, i formulärets ordning.
 NEW_FIBER_CUSTOMER = {
@@ -188,7 +193,8 @@ def test_sales_tool_loads_known_csv_customer_with_contract_services_price_and_te
 
     expected = clean(db.find_customer(KNOWN_CUSTOMER_ID, db.DEFAULT_DB_PATH)).iloc[0]
     assert metrics(at)["Dagens pris"] == f"{expected['MonthlyCharges']:.2f} $/mån"
-    assert metrics(at)["Kundtid"] == f"{expected['tenure']} månader"
+    assert expected["tenure"] == 1
+    assert metrics(at)["Kundtid"] == "1 månad"
     assert at.number_input(key=f"befintlig_{KNOWN_CUSTOMER_ID}_tenure").value == expected["tenure"]
     for column in ["Contract", "InternetService", "OnlineBackup", "PaymentMethod"]:
         assert at.selectbox(key=f"befintlig_{KNOWN_CUSTOMER_ID}_{column}").value == expected[column]
@@ -235,3 +241,125 @@ def test_sales_tool_changing_contract_recomputes_price_and_moves_risk_level():
     assert metrics(at)["Pris"] == f"{price:.2f} $/mån"
     assert metrics(at)["Risknivå"] == level.capitalize() != level_today
     assert metrics(at)["Dagens pris"] == f"{stored['MonthlyCharges']:.2f} $/mån"
+
+
+# --- Säljverktyg: alternativ och Spara kund (#40) ----------------------------------
+
+
+def ui_texts(at: AppTest) -> str:
+    """All text sidan visar, för att kontrollera ordval."""
+    parts = [e.value for kind in (at.markdown, at.caption, at.info, at.success) for e in kind]
+    parts += [f"{m.label} {m.value}" for m in at.metric]
+    parts += [frame.value.to_string() for frame in at.dataframe]
+    return " | ".join(parts)
+
+
+def search_customer(customer_id: str) -> AppTest:
+    at = run_page(SALES_PAGE)
+    at.text_input[0].input(customer_id).run()
+    assert not at.exception, [str(e) for e in at.exception]
+    return at
+
+
+def expected_alternatives(customer_id: str) -> list[dict]:
+    """Samma urval som sidan ska visa: suggest_actions minus what-if utan lägre sannolikhet."""
+    customers = db.load_customers(db.DEFAULT_DB_PATH)
+    pipeline, price_model = load(), load_price_model()
+    thresholds = risk_thresholds(predict_proba(pipeline, customers))
+    customer = clean(db.find_customer(customer_id, db.DEFAULT_DB_PATH))[RAW_FEATURE_COLUMNS]
+    baseline = predict_proba(pipeline, customer).iloc[0]
+    return [
+        a
+        for a in suggest_actions(customer, pipeline, price_model, thresholds)
+        if a["probability"] is None or a["probability"] < baseline
+    ]
+
+
+def test_sales_tool_shows_alternatives_with_price_and_level_side_by_side():
+    at = search_customer(KNOWN_CUSTOMER_ID)
+    expected = expected_alternatives(KNOWN_CUSTOMER_ID)
+    table = at.dataframe[0].value
+    assert list(table.columns) == ["Alternativ", "Pris", "Risknivå", "Underlag", "Kommentar"]
+    assert table["Alternativ"].tolist() == [a["label"] for a in expected]
+    assert table["Pris"].tolist() == [f"{a['price']:.2f} $/mån" for a in expected]
+    assert table["Risknivå"].tolist() == [a["level"].capitalize() for a in expected]
+    assert 1 <= len(table) <= 3
+
+
+def test_sales_tool_hides_what_if_that_does_not_lower_the_probability():
+    """Teknisk support ger den här kunden högre sannolikhet än utgångsläget och ska inte visas."""
+    at = search_customer(MEDIUM_RISK_CUSTOMER_ID)
+    labels = at.dataframe[0].value["Alternativ"].tolist()
+    assert labels == [a["label"] for a in expected_alternatives(MEDIUM_RISK_CUSTOMER_ID)]
+    assert "Teknisk support" not in labels
+    assert "Tvåårsavtal" in labels
+
+
+def test_sales_tool_low_risk_customer_gets_no_action_rule_without_numbers():
+    at = search_customer(LOW_RISK_CUSTOMER_ID)
+    table = at.dataframe[0].value
+    assert table["Alternativ"].tolist() == ["Ingen åtgärd"]
+    assert table["Pris"].tolist() == ["–"] and table["Risknivå"].tolist() == ["–"]
+    assert "Regel" in table["Underlag"].iloc[0]
+
+
+def test_sales_tool_marks_correlation_rows_as_not_proven():
+    at = search_customer(AUTO_PAYMENT_CANDIDATE_ID)
+    table = at.dataframe[0].value
+    row = table[table["Alternativ"] == "Automatisk banköverföring"]
+    assert len(row) == 1
+    assert row["Underlag"].iloc[0] == "Samband i datan, inte bevisad effekt"
+
+
+def test_sales_tool_customer_without_internet_gets_no_internet_addons():
+    at = search_customer(NO_INTERNET_CUSTOMER_ID)
+    labels = set(at.dataframe[0].value["Alternativ"])
+    assert labels
+    assert not labels & {"Teknisk support", "Onlinesäkerhet"}
+
+
+def test_sales_tool_says_so_when_no_alternative_is_left(monkeypatch):
+    """Sidan importerar suggest_actions vid varje körning, så ett byte i src.actions slår igenom."""
+    worse = {
+        "key": "x",
+        "label": "Test",
+        "kind": "what-if",
+        "price": 1.0,
+        "probability": 1.0,
+        "level": HIGH,
+        "note": "",
+    }
+    monkeypatch.setattr(actions, "suggest_actions", lambda *args: [worse])
+    at = search_customer(KNOWN_CUSTOMER_ID)
+    assert not at.dataframe
+    assert any("inget alternativ bedöms sänka risken" in c.value.lower() for c in at.caption)
+
+
+def test_sales_tool_never_claims_causation():
+    at = search_customer(KNOWN_CUSTOMER_ID)
+    text = ui_texts(at)
+    assert "sänker" not in text.lower()
+    assert "%" not in ui_texts(at).replace("% churn mot", "").replace("% i snitt", "")
+    assert "statistisk modell" in text
+
+
+def test_sales_tool_saves_new_customer_and_finds_it_again(monkeypatch, tmp_path):
+    tmp_db = tmp_path / "churn.db"
+    shutil.copy(db.DEFAULT_DB_PATH, tmp_db)
+    monkeypatch.setattr(db, "DEFAULT_DB_PATH", tmp_db)
+
+    at = fill_new_customer(run_page(SALES_PAGE), NEW_FIBER_CUSTOMER)
+    price_shown = metrics(at)["Pris"]
+    at.button(key="spara_ny").click().run()
+    assert not at.exception, [str(e) for e in at.exception]
+    assert at.success and "NEW-000001" in at.success[0].value
+
+    saved = db.load_new_customers(tmp_db)
+    assert len(saved) == 1
+    assert saved.loc[0, "tenure"] == 0 and float(saved.loc[0, "TotalCharges"]) == 0.0
+
+    at.text_input[0].input("NEW-000001").run()
+    assert not at.exception, [str(e) for e in at.exception]
+    assert not at.error
+    assert metrics(at)["Dagens pris"] == price_shown
+    assert metrics(at)["Kundtid"] == "0 månader"

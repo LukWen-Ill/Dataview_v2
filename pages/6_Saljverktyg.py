@@ -20,6 +20,8 @@ from app_helpers import (
     get_segment_comparison,
     load_or_stop,
 )
+from src import db
+from src.actions import suggest_actions
 from src.data import ADDON_SERVICES, RAW_FEATURE_COLUMNS, clean
 from src.labels import LABELS, VALUE_LABELS
 from src.model import predict_proba
@@ -40,6 +42,16 @@ thresholds = load_or_stop(get_risk_thresholds, "risknivåerna")
 
 YES_NO = ["Yes", "No"]
 SENIOR_LABELS = {0: "Nej", 1: "Ja"}
+# Vad ett alternativs siffror bygger på, per sort i åtgärdskatalogen.
+KIND_TEXT = {
+    "what-if": "Bedömt av modellen",
+    "samband": "Samband i datan, inte bevisad effekt",
+    "regel": "Regel, ingen bedömning",
+}
+DISCLAIMER = (
+    "Bedömningarna bygger på en statistisk modell och visar samband i datan, "
+    "inte vad som händer med just den här kunden."
+)
 
 
 def choose(column: str, defaults: dict, key: str, container, options=None, labels=None):
@@ -131,32 +143,71 @@ def stored_values(row: pd.DataFrame) -> dict:
     return values
 
 
-def evaluate(values: dict, monthly_charges: float | None) -> tuple[pd.DataFrame, float, str]:
-    """Kunden som en rad rådata, månadspris och risknivå. Utan givet pris predikteras det."""
+def evaluate(values: dict, monthly_charges: float | None) -> tuple[pd.DataFrame, float, float]:
+    """Kunden som en rad rådata, månadspris och churnsannolikhet. Utan givet pris predikteras det.
+
+    Sannolikheten visas aldrig rå - den blir en risknivå och används för att sortera bort
+    alternativ som inte bedöms ge lägre risk.
+    """
     customer = pd.DataFrame([values])
     if monthly_charges is None:
         monthly_charges = float(predict_price(price_model, customer).iloc[0])
     customer["MonthlyCharges"] = monthly_charges
     customer = customer[RAW_FEATURE_COLUMNS]
     probability = float(predict_proba(pipeline, customer).iloc[0])
-    return customer, monthly_charges, risk_level(probability, thresholds)
+    return customer, monthly_charges, probability
 
 
-def show_result(customer: pd.DataFrame, monthly_charges: float, level: str) -> None:
-    """Pris, risknivå och de största riskfaktorerna. Byggs ut i #40."""
+def months(tenure: int) -> str:
+    return "1 månad" if tenure == 1 else f"{tenure} månader"
+
+
+def alternatives_table(actions: list[dict]) -> pd.DataFrame:
+    """Alternativen som en tabell med pris och risknivå sida vid sida. Regler har inga siffror."""
+    rows = []
+    for action in actions:
+        has_numbers = action["kind"] != "regel"
+        rows.append(
+            {
+                "Alternativ": action["label"],
+                "Pris": f"{action['price']:.2f} $/mån" if has_numbers else "–",
+                "Risknivå": action["level"].capitalize() if has_numbers else "–",
+                "Underlag": KIND_TEXT[action["kind"]],
+                "Kommentar": action["note"],
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def show_result(customer: pd.DataFrame, monthly_charges: float, probability: float) -> None:
+    """Pris, risknivå, de största riskfaktorerna och alternativen ur åtgärdskatalogen."""
     c1, c2 = st.columns(2)
     c1.metric("Pris", f"{monthly_charges:.2f} $/mån", border=True)
-    c2.metric("Risknivå", level.capitalize(), border=True)
+    c2.metric("Risknivå", risk_level(probability, thresholds).capitalize(), border=True)
+    st.caption(
+        "Risknivån är relativ: lägsta tredjedelen av kunderna i träningsdatan är låg, "
+        "mellersta medel och högsta hög."
+    )
+
     st.markdown("**Största riskfaktorer**")
     factors = risk_factors(customer, customers)
     if not factors:
         st.caption("Inget av kundens val ligger tydligt över snittet i churn.")
     for factor in factors:
         st.markdown(f"- {factor}")
-    st.caption(
-        "Risknivån är relativ: lägsta tredjedelen av kunderna i träningsdatan är låg, "
-        "mellersta medel och högsta hög."
-    )
+
+    st.markdown("**Alternativ att lägga fram**")
+    # Ett what-if som inte bedöms ge lägre sannolikhet än utgångsläget visas inte.
+    actions = [
+        action
+        for action in suggest_actions(customer, pipeline, price_model, thresholds)
+        if action["probability"] is None or action["probability"] < probability
+    ]
+    if actions:
+        st.dataframe(alternatives_table(actions), width="stretch", hide_index=True)
+    else:
+        st.caption("Inget alternativ bedöms sänka risken.")
+    st.caption(DISCLAIMER)
 
 
 new_tab, existing_tab = st.tabs(["Ny kund", "Befintlig kund"])
@@ -169,9 +220,15 @@ with new_tab:
     if values is None:
         st.info("Fyll i alla fält så räknas pris och risknivå fram.")
     else:
-        customer, monthly_charges, level = evaluate(values, None)
+        customer, monthly_charges, probability = evaluate(values, None)
         st.subheader("Resultat")
-        show_result(customer, monthly_charges, level)
+        show_result(customer, monthly_charges, probability)
+        if st.button("Spara kund", key="spara_ny"):
+            # Sparas i registret new_customers - aldrig i träningsdatan.
+            customer_id = db.save_new_customer(
+                {**values, "MonthlyCharges": monthly_charges}, db.DEFAULT_DB_PATH
+            )
+            st.success(f"Kunden sparades med id {customer_id}. Sök på id:t under Befintlig kund.")
 
 with existing_tab:
     customer_id = st.text_input("Kund-id", placeholder="t.ex. 7590-VHVEG eller NEW-000001").strip()
@@ -180,7 +237,7 @@ with existing_tab:
         stored = stored_values(row)
         c1, c2 = st.columns(2)
         c1.metric("Dagens pris", f"{stored['MonthlyCharges']:.2f} $/mån", border=True)
-        c2.metric("Kundtid", f"{stored['tenure']} månader", border=True)
+        c2.metric("Kundtid", months(stored["tenure"]), border=True)
 
         # Segmentet gäller kunden som den är sparad - räknas vid sök, inte vid varje justering.
         with st.spinner("Jämför med liknande kunder …"):
@@ -200,10 +257,10 @@ with existing_tab:
         else:
             # Oförändrad konfiguration: dagens faktiska pris. Ändrad: prismodellen räknar om.
             changed = any(values[col] != stored[col] for col in PRICE_FEATURE_COLUMNS)
-            customer, monthly_charges, level = evaluate(
+            customer, monthly_charges, probability = evaluate(
                 values, None if changed else stored["MonthlyCharges"]
             )
             st.subheader("Resultat")
             if changed:
                 st.caption("Ändrat från dagens läge - pris och risknivå är omräknade.")
-            show_result(customer, monthly_charges, level)
+            show_result(customer, monthly_charges, probability)
