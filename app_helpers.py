@@ -36,6 +36,17 @@ def get_results() -> dict:
 
 
 @st.cache_data
+def get_customers_with_predictions() -> pd.DataFrame:
+    """Kundtabellen med kolumnen churn_probability från den sparade modellen.
+
+    Alla kunder får en sannolikhet, även de som redan lämnat - Dashboard-sidan filtrerar
+    själv via src/dashboard.py. Radordningen är samma som i get_customers().
+    """
+    customers = get_customers()
+    return customers.assign(churn_probability=model.predict_proba(get_model(), customers))
+
+
+@st.cache_data
 def get_test_predictions() -> pd.DataFrame:
     """Slutmodellens sannolikheter på testmängden - används för threshold-analysen."""
     if not train.TEST_PREDICTIONS_PATH.is_file():
