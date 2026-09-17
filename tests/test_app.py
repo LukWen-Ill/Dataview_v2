@@ -109,13 +109,14 @@ def test_customers_with_predictions_raises_when_model_is_missing(monkeypatch, tm
         get_customers_with_predictions()
 
 
-def test_dashboard_page_shows_kpis_and_table():
-    """Default-filter (tomma listor) ska ge KPI-rad, graf och tabell utan fel."""
+def test_dashboard_page_shows_kpis_and_cards():
+    """Default-filter (tomma listor) ska ge KPI-rad, graf och ett kort per grupp utan fel."""
     at = run_page(PAGES[0])
     assert not at.exception, [str(e) for e in at.exception]
     labels = {m.label for m in at.metric}
-    assert "MRR idag" in labels
-    assert len(at.dataframe) >= 1
+    assert "Månadsintäkt idag" in labels
+    assert any("churn-risk" in c.value for c in at.caption)
+    assert any("%" in m.value for m in at.markdown)  # churn-risken i korten
 
 
 def test_dashboard_page_has_segment_filter():

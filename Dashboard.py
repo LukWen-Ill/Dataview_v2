@@ -31,17 +31,25 @@ customers = load_or_stop(get_customers_with_predictions, "kunddatan och modellen
 labels, _, _ = load_or_stop(lambda: get_segments(DEFAULT_K), "segmenten")
 customers = customers.assign(segment=labels)
 
+# Kundvänliga namn på kolumnerna. Datavärdena (t.ex. "Month-to-month") visas som de är.
+COLUMN_LABELS = {
+    "Contract": "Avtal",
+    "InternetService": "Internet",
+    "PaymentMethod": "Betalsätt",
+    "segment": "Segment",
+    "tenure_group": "Kundtid (månader)",
+}
+
 # Filter. Tom lista = inget filter, precis som filter_customers tolkar det.
-# Sista rutan styr tabellen längst ned; den ligger här så att alla anrop kan göras i ett svep.
+# Sista rutan styr korten längst ned; den ligger här så att alla anrop kan göras i ett svep.
 FILTER_COLUMNS = ["Contract", "InternetService", "PaymentMethod", "segment"]
-FILTER_LABELS = {"segment": "Segment"}  # övriga kolumner visas med sitt kolumnnamn
 HORIZONS = [3, 6, 12]  # månader framåt i grafen, max 12
 f1, f2, f3, f4, f5, f6 = st.columns(6)
 filters = {}
 for col, box in zip(FILTER_COLUMNS, (f1, f2, f3, f4), strict=True):
-    filters[col] = box.multiselect(FILTER_LABELS.get(col, col), sorted(customers[col].unique()))
-horizon = f5.selectbox("Horisont (månader)", HORIZONS, index=len(HORIZONS) - 1)
-group_column = f6.selectbox("Gruppera tabellen på", GROUP_COLUMNS, index=0)
+    filters[col] = box.multiselect(COLUMN_LABELS[col], sorted(customers[col].unique()))
+horizon = f5.selectbox("Prognos (månader)", HORIZONS, index=len(HORIZONS) - 1)
+group_column = f6.selectbox("Visa per", GROUP_COLUMNS, index=0, format_func=COLUMN_LABELS.get)
 
 # Alla beräkningar sker i src/dashboard.py. Ett filter utan kunder ger ValueError.
 try:
@@ -61,18 +69,27 @@ def money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
 
-c1, c2, c3, c4, c5, c6 = st.columns(6)
-c1.metric("MRR idag", money(numbers["mrr_today"]), border=True)
-c2.metric("Förväntad förlust nästa månad", money(numbers["expected_loss_next_month"]), border=True)
-c3.metric("Faktisk förlust senaste månaden", money(numbers["actual_loss_last_month"]), border=True)
-c4.metric("Predikterad churn", f"{numbers['predicted_churn_rate']:.1%}", border=True)
-c5.metric("Aktiva kunder", f"{numbers['n_customers']:,}".replace(",", " "), border=True)
-c6.metric(f"MRR månad {horizon} inkl. nykunder", money(forecast["total_mrr"].iloc[-1]), border=True)
+def churn_color(rate: float) -> str:
+    """Färg för churn-risk i korten: grön under 15 %, orange upp till 30 %, röd över."""
+    if rate >= 0.30:
+        return "red"
+    if rate >= 0.15:
+        return "orange"
+    return "green"
 
-st.subheader(f"Intäktsprognos {horizon} månader framåt")
+
+c1, c2, c3, c4, c5, c6 = st.columns(6)
+c1.metric("Månadsintäkt idag", money(numbers["mrr_today"]), border=True)
+c2.metric("Väntad förlust nästa månad", money(numbers["expected_loss_next_month"]), border=True)
+c3.metric("Förlorad intäkt förra månaden", money(numbers["actual_loss_last_month"]), border=True)
+c4.metric("Churn-risk", f"{numbers['predicted_churn_rate']:.1%}", border=True)
+c5.metric("Aktiva kunder", f"{numbers['n_customers']:,}".replace(",", " "), border=True)
+c6.metric(f"Månadsintäkt om {horizon} mån", money(forecast["total_mrr"].iloc[-1]), border=True)
+
+st.subheader(f"Prognos {horizon} månader framåt")
 # Två serier i långt format så att Altair kan färga dem. Blå = dagens kunder plus mockade
 # nykunder, röd = förväntad förlust per månad på hela den blå linjen.
-SERIES = {"total_mrr": "Intäkt inkl. nykunder", "total_loss": "Förväntad förlust per månad"}
+SERIES = {"total_mrr": "Månadsintäkt", "total_loss": "Väntad förlust per månad"}
 long = forecast.rename(columns=SERIES).melt(
     id_vars=["months_ahead", "month_label"],
     value_vars=list(SERIES.values()),
@@ -120,13 +137,13 @@ bands = (
         y2=alt.value(HEIGHT),
         tooltip=[
             alt.Tooltip("month_label:O", title="Månad"),
-            alt.Tooltip("total_mrr:Q", format=",.0f", title="Intäkt inkl. nykunder"),
+            alt.Tooltip("total_mrr:Q", format=",.0f", title="Månadsintäkt"),
             alt.Tooltip("expected_mrr:Q", format=",.0f", title="  varav dagens kunder"),
-            alt.Tooltip("new_mrr:Q", format=",.0f", title="  varav nykunder (mock)"),
-            alt.Tooltip("total_loss:Q", format=",.0f", title="Förväntad förlust denna månad"),
+            alt.Tooltip("new_mrr:Q", format=",.0f", title="  varav nya kunder"),
+            alt.Tooltip("total_loss:Q", format=",.0f", title="Väntad förlust"),
             alt.Tooltip("expected_loss:Q", format=",.0f", title="  varav dagens kunder"),
             alt.Tooltip("expected_customers:Q", format=".0f", title="Dagens kunder kvar"),
-            alt.Tooltip("new_customers:Q", format=",.0f", title="Nya kunder denna månad (mock)"),
+            alt.Tooltip("new_customers:Q", format=",.0f", title="Nya kunder"),
         ],
     )
     .add_params(hover)
@@ -134,29 +151,21 @@ bands = (
 chart = alt.layer(lines, points, rule, bands).properties(height=HEIGHT)
 st.altair_chart(chart, width="stretch")
 st.caption(
-    "Blå linje är dagens aktiva kunders kvarvarande intäkt plus en mockad nykundsförsäljning. "
-    "Röd linje är den förväntade förlusten per månad på hela den blå linjen, räknad med "
-    "churn-risken. Nykundsmocken: ca "
-    f"{NEW_CUSTOMER_MOCK['start']} nya kunder månad 1, +{NEW_CUSTOMER_MOCK['growth']:.0%} per "
-    f"månad med ±{NEW_CUSTOMER_MOCK['spread']:.0%} slump, "
-    f"{NEW_CUSTOMER_MOCK['monthly_charge']:.0f} $ per kund och samma churn-risk som de "
-    "befintliga. Hela prognosen antar konstant churn-risk per kund och månad samt frysta priser."
-)
-st.caption(
-    "Modellens sannolikhet tolkas som risk per månad, eftersom `Churn = Yes` i datasettet "
-    "betyder att kunden lämnade senaste månaden. Sannolikheterna är inte kalibrerade "
-    '(`class_weight="balanced"`), så kurvan är brant.'
+    "Prognosen bygger på dagens aktiva kunder plus en antagen nykundstillväxt "
+    f"(ca {NEW_CUSTOMER_MOCK['start']} nya kunder per månad, +{NEW_CUSTOMER_MOCK['growth']:.0%} "
+    "per månad), konstant churn-risk per kund och oförändrade priser."
 )
 
-st.subheader(f"Per {group_column}")
-st.dataframe(
-    table.style.format(
-        {
-            "mrr": "{:,.0f}",
-            "forvantad_forlust_nasta_manad": "{:,.0f}",
-            "predikterad_churn": "{:.0%}",
-        }
-    ),
-    width="stretch",
-    hide_index=True,
-)
+# Ett kort per grupp med churn-risken i fokus. Sorterat på väntad förlust, störst först.
+st.subheader(f"Per {COLUMN_LABELS[group_column].lower()}")
+for card, (_, row) in zip(st.columns(len(table)), table.iterrows(), strict=True):
+    with card.container(border=True):
+        rate = row["predikterad_churn"]
+        st.markdown(f"**{row[group_column]}**")
+        st.markdown(f"## :{churn_color(rate)}[{rate:.0%}]")
+        st.caption("churn-risk")
+        st.markdown(
+            f"{row['antal_kunder']:,} kunder  \n"
+            f"{money(row['mrr'])} per månad  \n"
+            f"Väntad förlust {money(row['forvantad_forlust_nasta_manad'])}".replace(",", " ")
+        )

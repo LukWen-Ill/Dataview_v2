@@ -142,7 +142,7 @@ felmeddelande med träningskommandot.
 
 | Sida | Innehåll |
 |---|---|
-| Dashboard (extra, startsida) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för förväntad förlust per månad, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, sorterbar tabell per grupp |
+| Dashboard (extra, startsida) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för förväntad förlust per månad, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, ett kort per grupp med churn-risk |
 | Översikt | Antal kunder, churn-andel, vald modell, testresultat, modelljämförelse |
 | Data | EDA: churn per kategori, kundtid, månadskostnad, korrelationer |
 | Modeller | Jämförelse på validation, slutresultat på test, threshold-slider med confusion matrix, ROC-kurva, classification report, feature importance |
