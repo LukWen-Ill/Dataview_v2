@@ -2,10 +2,12 @@
 
 Kör `python -m src.db` för att bygga data/churn.db från rå-CSV:n.
 
-Tre tabeller:
-    customers    rådatan, en rad per kund (fylls från data/raw/telco_churn.csv)
-    model_runs   en rad per utvärderad modell när python -m src.train körs
-    predictions  en rad per prediktion som görs i appen
+Fyra tabeller:
+    customers      rådatan, en rad per kund (fylls från data/raw/telco_churn.csv)
+    new_customers  kunder som lagts in via appen. Eget register utan Churn-kolumn,
+                   så träningen (som bara läser customers) aldrig ser dem
+    model_runs     en rad per utvärderad modell när python -m src.train körs
+    predictions    en rad per prediktion som görs i appen
 """
 
 from __future__ import annotations
@@ -19,7 +21,14 @@ from pathlib import Path
 
 import pandas as pd
 
-from src.data import DEFAULT_DATA_PATH, load_raw, validate
+from src.data import (
+    DEFAULT_DATA_PATH,
+    RAW_CATEGORICAL_COLUMNS,
+    RAW_FEATURE_COLUMNS,
+    RAW_NUMERIC_COLUMNS,
+    load_raw,
+    validate,
+)
 
 DEFAULT_DB_PATH = Path(__file__).resolve().parents[1] / "data" / "churn.db"
 
@@ -31,6 +40,31 @@ CREATE TABLE IF NOT EXISTS model_runs (
     stage       TEXT NOT NULL,   -- 'validation' (modelljämförelse) eller 'test' (slutmodell)
     best_params TEXT NOT NULL,   -- JSON
     metrics     TEXT NOT NULL    -- JSON
+);
+
+CREATE TABLE IF NOT EXISTS new_customers (
+    customer_id      TEXT PRIMARY KEY,   -- NEW-000001, NEW-000002, ...
+    created_at       TEXT NOT NULL,
+    -- Samma kolumner och typer som customers, men ingen Churn: utfallet är okänt.
+    SeniorCitizen    INTEGER,
+    tenure           INTEGER,
+    MonthlyCharges   REAL,
+    TotalCharges     TEXT,
+    gender           TEXT,
+    Partner          TEXT,
+    Dependents       TEXT,
+    PhoneService     TEXT,
+    MultipleLines    TEXT,
+    InternetService  TEXT,
+    OnlineSecurity   TEXT,
+    OnlineBackup     TEXT,
+    DeviceProtection TEXT,
+    TechSupport      TEXT,
+    StreamingTV      TEXT,
+    StreamingMovies  TEXT,
+    Contract         TEXT,
+    PaperlessBilling TEXT,
+    PaymentMethod    TEXT
 );
 
 CREATE TABLE IF NOT EXISTS predictions (
@@ -143,6 +177,93 @@ def load_predictions(db_path: str | Path = DEFAULT_DB_PATH, limit: int = 50) -> 
         return pd.read_sql(
             "SELECT * FROM predictions ORDER BY id DESC LIMIT ?", conn, params=(limit,)
         )
+
+
+# --- Register för nya kunder (läggs in via appen, aldrig av träningen) ---
+
+# Så här läses en ny kund tillbaka: samma kolumnnamn som i customers, plus created_at.
+_NEW_CUSTOMER_SELECT = (
+    "SELECT customer_id AS customerID, "
+    + ", ".join(RAW_FEATURE_COLUMNS)
+    + ", created_at FROM new_customers"
+)
+
+
+def _check_new_customer(values: dict, customers: pd.DataFrame) -> None:
+    """Kasta ValueError om värdena inte ser ut som en giltig kund. Skriver inget."""
+    unknown = sorted(set(values) - set(RAW_FEATURE_COLUMNS))
+    if unknown:
+        raise ValueError(f"Okända kolumner: {unknown}")
+
+    row = pd.DataFrame([values])
+    validate(row, require_target=False)  # SchemaError (en ValueError) om kolumner saknas
+
+    for col in RAW_NUMERIC_COLUMNS:
+        try:
+            pd.to_numeric(row[col])
+        except ValueError as exc:
+            raise ValueError(f"Ogiltigt värde i {col}: {values[col]!r}") from exc
+
+    # Tillåtna kategorivärden är de som finns i träningsdatan, precis som i appens formulär.
+    for col in RAW_CATEGORICAL_COLUMNS:
+        allowed = set(customers[col].unique())
+        if values[col] not in allowed:
+            raise ValueError(
+                f"Ogiltigt värde i {col}: {values[col]!r}. Tillåtna: {sorted(allowed)}"
+            )
+
+
+def _next_customer_id(conn: sqlite3.Connection) -> str:
+    """Löpnummer: NEW-000001, NEW-000002, ..."""
+    last = conn.execute("SELECT MAX(customer_id) FROM new_customers").fetchone()[0]
+    n = int(last.removeprefix("NEW-")) if last else 0
+    return f"NEW-{n + 1:06d}"
+
+
+def save_new_customer(values: dict, db_path: str | Path = DEFAULT_DB_PATH) -> str:
+    """Spara en kund från appen i new_customers och returnera dess kund-id.
+
+    values ska ha exakt kolumnerna i RAW_FEATURE_COLUMNS. Ogiltiga värden ger
+    ValueError innan något skrivs. Tabellen customers rörs aldrig.
+    """
+    db_path = Path(db_path)
+    _require_db(db_path)
+    _check_new_customer(values, load_customers(db_path))
+
+    with _connect(db_path) as conn:
+        customer_id = _next_customer_id(conn)
+        row = pd.DataFrame([{"customer_id": customer_id, "created_at": _now(), **values}])
+        row.to_sql("new_customers", conn, if_exists="append", index=False)
+        conn.commit()
+    return customer_id
+
+
+def load_new_customers(db_path: str | Path = DEFAULT_DB_PATH) -> pd.DataFrame:
+    """Alla kunder som lagts in via appen. Tom DataFrame med rätt kolumner om inga finns."""
+    db_path = Path(db_path)
+    _require_db(db_path)
+    with _connect(db_path) as conn:
+        return pd.read_sql(_NEW_CUSTOMER_SELECT + " ORDER BY customer_id", conn)
+
+
+def find_customer(customer_id: str, db_path: str | Path = DEFAULT_DB_PATH) -> pd.DataFrame:
+    """Hämta en kund som en enrads-DataFrame. Söker customers först, sedan new_customers.
+
+    Från customers följer Churn med, från new_customers inte. KeyError om id:t inte finns.
+    """
+    db_path = Path(db_path)
+    _require_db(db_path)
+    with _connect(db_path) as conn:
+        row = pd.read_sql(
+            "SELECT * FROM customers WHERE customerID = ?", conn, params=(customer_id,)
+        )
+        if row.empty:
+            row = pd.read_sql(
+                _NEW_CUSTOMER_SELECT + " WHERE customer_id = ?", conn, params=(customer_id,)
+            )
+    if row.empty:
+        raise KeyError(f"Ingen kund med id {customer_id!r}")
+    return row
 
 
 def main(argv: list[str] | None = None) -> int:
