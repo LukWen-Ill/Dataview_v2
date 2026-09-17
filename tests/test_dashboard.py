@@ -283,6 +283,10 @@ def test_with_new_customers_handraknade_varden(three_customers):
     assert result["total_mrr"].tolist() == pytest.approx(
         (result["expected_mrr"] + result["new_mrr"]).tolist()
     )
+    # Nykundernas förlust månad m = new_mrr[m-1] * 0.5: 0, 0, 500, 800.
+    expected_total_loss = result["expected_loss"] + pd.Series([0.0, 0.0, 500.0, 800.0])
+    assert result["total_loss"].tolist() == pytest.approx(expected_total_loss.tolist())
+    assert result.loc[0, "total_loss"] == 0.0
 
 
 def test_with_new_customers_manad_noll_har_inga_nykunder(three_customers):

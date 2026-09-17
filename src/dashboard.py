@@ -172,10 +172,12 @@ def with_new_customers(
     fram med (1 − monthly_risk)^k precis som de befintliga kunderna.
 
     Nya kolumner: new_customers (nya just den månaden), new_mrr (MRR från alla nykohorter
-    som är kvar) och total_mrr (expected_mrr + new_mrr). Månad 0 har inga nykunder.
+    som är kvar), total_mrr (expected_mrr + new_mrr) och total_loss (förväntad förlust
+    just den månaden på hela total_mrr: dagens kunders expected_loss plus föregående månads
+    new_mrr × monthly_risk). Månad 0 har inga nykunder och ingen förlust.
     monthly_risk utanför [0, 1] ger ValueError.
     """
-    for column in ("months_ahead", "expected_mrr"):
+    for column in ("months_ahead", "expected_mrr", "expected_loss"):
         if column not in forecast.columns:
             raise KeyError(f"Kolumnen {column!r} finns inte i prognosen")
     if not 0 <= monthly_risk <= 1:
@@ -198,4 +200,7 @@ def with_new_customers(
     out["new_customers"] = new_customers
     out["new_mrr"] = new_mrr
     out["total_mrr"] = out["expected_mrr"] + out["new_mrr"]
+    # Nykundernas förlust en månad är andelen monthly_risk av det de stod för månaden före.
+    new_loss = out["new_mrr"].shift(1).fillna(0.0) * monthly_risk
+    out["total_loss"] = out["expected_loss"] + new_loss
     return out

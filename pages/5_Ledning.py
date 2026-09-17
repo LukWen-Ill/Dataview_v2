@@ -63,11 +63,12 @@ c6.metric("MRR månad 24 inkl. nykunder", money(forecast["total_mrr"].iloc[-1]),
 
 st.subheader("Intäktsprognos 24 månader framåt")
 # Två serier i långt format så att Altair kan färga dem. Blå = dagens kunder plus mockade
-# nykunder. Kopiorna behövs för att beloppen också ska finnas kvar som tooltip-kolumner.
+# nykunder, röd = förväntad förlust per månad på hela den blå linjen.
+# Kopiorna behövs för att beloppen också ska finnas kvar som tooltip-kolumner.
 long = forecast.assign(
     **{
         "Intäkt inkl. nykunder": forecast["total_mrr"],
-        "Ackumulerad förlust": forecast["cumulative_loss"],
+        "Förväntad förlust per månad": forecast["total_loss"],
     }
 ).melt(
     id_vars=[
@@ -80,8 +81,9 @@ long = forecast.assign(
         "new_customers",
         "new_mrr",
         "total_mrr",
+        "total_loss",
     ],
-    value_vars=["Intäkt inkl. nykunder", "Ackumulerad förlust"],
+    value_vars=["Intäkt inkl. nykunder", "Förväntad förlust per månad"],
     var_name="serie",
     value_name="belopp",
 )
@@ -95,7 +97,7 @@ chart = (
             "serie:N",
             title=None,
             scale=alt.Scale(
-                domain=["Intäkt inkl. nykunder", "Ackumulerad förlust"],
+                domain=["Intäkt inkl. nykunder", "Förväntad förlust per månad"],
                 range=["#4c78a8", "#e45756"],
             ),
         ),
@@ -104,10 +106,10 @@ chart = (
             alt.Tooltip("total_mrr:Q", format=",.0f", title="Intäkt inkl. nykunder"),
             alt.Tooltip("expected_mrr:Q", format=",.0f", title="  varav dagens kunder"),
             alt.Tooltip("new_mrr:Q", format=",.0f", title="  varav nykunder (mock)"),
+            alt.Tooltip("total_loss:Q", format=",.0f", title="Förväntad förlust denna månad"),
+            alt.Tooltip("expected_loss:Q", format=",.0f", title="  varav dagens kunder"),
             alt.Tooltip("expected_customers:Q", format=".0f", title="Dagens kunder kvar"),
             alt.Tooltip("new_customers:Q", format=",.0f", title="Nya kunder denna månad (mock)"),
-            alt.Tooltip("expected_loss:Q", format=",.0f", title="Förlust denna månad"),
-            alt.Tooltip("cumulative_loss:Q", format=",.0f", title="Ackumulerad förlust"),
         ],
     )
     .properties(height=350)
@@ -115,8 +117,8 @@ chart = (
 st.altair_chart(chart, width="stretch")
 st.caption(
     "Blå linje är dagens aktiva kunders kvarvarande intäkt plus en mockad nykundsförsäljning. "
-    "Röd linje är den ackumulerade förlusten på dagens kunder, alltså vad som händer om vi inte "
-    "gör något. Nykundsmocken: ca "
+    "Röd linje är den förväntade förlusten per månad på hela den blå linjen, räknad med "
+    "churn-risken. Nykundsmocken: ca "
     f"{NEW_CUSTOMER_MOCK['start']} nya kunder månad 1, +{NEW_CUSTOMER_MOCK['growth']:.0%} per "
     f"månad med ±{NEW_CUSTOMER_MOCK['spread']:.0%} slump, "
     f"{NEW_CUSTOMER_MOCK['monthly_charge']:.0f} $ per kund och samma churn-risk som de "

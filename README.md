@@ -157,8 +157,8 @@ m = 0–24 månader. Kvarvarande MRR är Σ MonthlyCharges × (1 − p)^m och f�
 är skillnaden mot månaden före. Beräkningarna ligger i `src/dashboard.py`; sidan
 `pages/5_Ledning.py` visar bara resultatet och tränar ingenting om.
 Blå linje är dagens aktiva kunders kvarvarande intäkt plus en **mockad nykundsförsäljning**;
-röd linje är den ackumulerade förlusten på dagens kunder, alltså vad som händer om vi inte gör
-något. Nykundsmocken (`NEW_CUSTOMER_MOCK` i
+röd linje är den förväntade förlusten per månad på hela den blå linjen, räknad med
+churn-risken. Nykundsmocken (`NEW_CUSTOMER_MOCK` i
 `src/dashboard.py`): ca 600 nya kunder månad 1 (datasetets senaste kohort), +5 % per månad
 med ±20 % seedad slump, 50 $ per kund och samma churn-risk som de befintliga. Hela prognosen
 antar konstant churn-risk per kund och månad samt frysta priser.

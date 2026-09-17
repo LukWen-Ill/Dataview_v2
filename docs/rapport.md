@@ -107,8 +107,8 @@ churn-modellen svarar på "vilka enskilda kunder riskerar att lämna?".
 Sidan Ledning blickar framåt: varje aktiv kund (Churn = No) rullas fram 24 månader med
 sannolikheten (1 − p)^m att vara kvar, där p är modellens churn-sannolikhet, och summerar
 kvarvarande månadsintäkt och förväntad förlust. Blå linje är dagens aktiva kunders
-kvarvarande intäkt plus en mockad nykundsförsäljning; röd linje är den ackumulerade
-förlusten på dagens kunder, alltså vad som händer om vi inte gör något. Nykundsmocken
+kvarvarande intäkt plus en mockad nykundsförsäljning; röd linje är den förväntade
+förlusten per månad på hela den blå linjen, räknad med churn-risken. Nykundsmocken
 är (ca 600 nya kunder månad 1, +5 % per månad med ±20 % seedad
 slump, 50 $ per kund, samma churn-risk som de befintliga). Hela prognosen antar konstant
 churn-risk per kund och månad samt frysta priser.
