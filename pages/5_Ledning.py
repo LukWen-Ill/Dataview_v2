@@ -6,7 +6,15 @@ import altair as alt
 import streamlit as st
 
 from app_helpers import get_customers_with_predictions, get_segments, load_or_stop
-from src.dashboard import GROUP_COLUMNS, filter_customers, group_breakdown, kpis, revenue_forecast
+from src.dashboard import (
+    GROUP_COLUMNS,
+    NEW_CUSTOMER_MOCK,
+    filter_customers,
+    group_breakdown,
+    kpis,
+    revenue_forecast,
+    with_new_customers,
+)
 from src.segment import DEFAULT_K
 
 st.set_page_config(page_title="Ledning", page_icon="📈", layout="wide")
@@ -33,7 +41,8 @@ group_column = f5.selectbox("Gruppera tabellen på", GROUP_COLUMNS, index=0)
 try:
     selected = filter_customers(customers, filters)
     numbers = kpis(selected)
-    forecast = revenue_forecast(selected)
+    # Mockade nykunder rullas fram med samma medelrisk som de filtrerade kunderna.
+    forecast = with_new_customers(revenue_forecast(selected), numbers["predicted_churn_rate"])
     table = group_breakdown(selected, group_column)
 except ValueError:
     st.warning("Inga kunder matchar filtret.")
@@ -44,20 +53,22 @@ def money(value: float) -> str:
     return f"{value:,.0f} $".replace(",", " ")
 
 
-c1, c2, c3, c4, c5 = st.columns(5)
+c1, c2, c3, c4, c5, c6 = st.columns(6)
 c1.metric("MRR idag", money(numbers["mrr_today"]), border=True)
 c2.metric("Förväntad förlust nästa månad", money(numbers["expected_loss_next_month"]), border=True)
 c3.metric("Faktisk förlust senaste månaden", money(numbers["actual_loss_last_month"]), border=True)
 c4.metric("Predikterad churn", f"{numbers['predicted_churn_rate']:.1%}", border=True)
 c5.metric("Aktiva kunder", f"{numbers['n_customers']:,}".replace(",", " "), border=True)
+c6.metric("MRR månad 24 inkl. nykunder", money(forecast["total_mrr"].iloc[-1]), border=True)
 
 st.subheader("Intäktsprognos 24 månader framåt")
-# Två serier i långt format så att Altair kan färga dem. Kopiorna behövs för att
-# expected_mrr och cumulative_loss också ska finnas kvar som tooltip-kolumner.
+# Tre serier i långt format så att Altair kan färga dem. Kopiorna behövs för att
+# beloppen också ska finnas kvar som tooltip-kolumner.
 long = forecast.assign(
     **{
         "Kvarvarande intäkt": forecast["expected_mrr"],
         "Ackumulerad förlust": forecast["cumulative_loss"],
+        "Total inkl. nykunder": forecast["total_mrr"],
     }
 ).melt(
     id_vars=[
@@ -67,8 +78,11 @@ long = forecast.assign(
         "expected_mrr",
         "expected_loss",
         "cumulative_loss",
+        "new_customers",
+        "new_mrr",
+        "total_mrr",
     ],
-    value_vars=["Kvarvarande intäkt", "Ackumulerad förlust"],
+    value_vars=["Kvarvarande intäkt", "Ackumulerad förlust", "Total inkl. nykunder"],
     var_name="serie",
     value_name="belopp",
 )
@@ -82,8 +96,8 @@ chart = (
             "serie:N",
             title=None,
             scale=alt.Scale(
-                domain=["Kvarvarande intäkt", "Ackumulerad förlust"],
-                range=["#4c78a8", "#e45756"],
+                domain=["Kvarvarande intäkt", "Ackumulerad förlust", "Total inkl. nykunder"],
+                range=["#4c78a8", "#e45756", "#54a24b"],
             ),
         ),
         tooltip=[
@@ -92,14 +106,21 @@ chart = (
             alt.Tooltip("expected_mrr:Q", format=",.0f", title="Kvarvarande intäkt"),
             alt.Tooltip("expected_loss:Q", format=",.0f", title="Förlust denna månad"),
             alt.Tooltip("cumulative_loss:Q", format=",.0f", title="Ackumulerad förlust"),
+            alt.Tooltip("new_customers:Q", format=",.0f", title="Nya kunder (mock)"),
+            alt.Tooltip("new_mrr:Q", format=",.0f", title="Nykunds-MRR (mock)"),
+            alt.Tooltip("total_mrr:Q", format=",.0f", title="Total inkl. nykunder"),
         ],
     )
     .properties(height=350)
 )
 st.altair_chart(chart, width="stretch")
 st.caption(
-    "Prognosen gäller bara dagens aktiva kunder, antar konstant churn-risk per kund och månad, "
-    "frysta priser och ingen nykundsförsäljning. Den visar vad som händer om vi inte gör något."
+    "Blå och röd linje gäller bara dagens aktiva kunder och visar vad som händer om vi inte gör "
+    "något. Grön linje lägger till en mockad nykundsförsäljning: ca "
+    f"{NEW_CUSTOMER_MOCK['start']} nya kunder månad 1, +{NEW_CUSTOMER_MOCK['growth']:.0%} per "
+    f"månad med ±{NEW_CUSTOMER_MOCK['spread']:.0%} slump, "
+    f"{NEW_CUSTOMER_MOCK['monthly_charge']:.0f} $ per kund och samma churn-risk som de "
+    "befintliga. Hela prognosen antar konstant churn-risk per kund och månad samt frysta priser."
 )
 st.caption(
     "Modellens sannolikhet tolkas som risk per månad, eftersom `Churn = Yes` i datasettet "

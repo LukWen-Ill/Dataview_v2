@@ -9,12 +9,23 @@ from __future__ import annotations
 
 from datetime import date
 
+import numpy as np
 import pandas as pd
 
 from src.data import TARGET_COLUMN, add_features, clean
+from src.models import RANDOM_STATE
 
 # Kolumner som Ledning-sidan får gruppera på. tenure_group skapas av add_features.
 GROUP_COLUMNS = ["Contract", "InternetService", "PaymentMethod", "tenure_group"]
+
+# Mockad nykundsförsäljning för Ledning-sidan. Startnivån är datasetets senaste kohort:
+# 613 kunder med kundtid 1 månad, snitt 50 $/mån. Tillväxt och slumpspann är påhittade.
+NEW_CUSTOMER_MOCK = {
+    "start": 600,  # nya kunder månad 1
+    "growth": 0.05,  # trendens tillväxt per månad
+    "spread": 0.2,  # seedad slump ±20 % kring trenden
+    "monthly_charge": 50.0,  # $ per ny kund och månad
+}
 
 # Hårdkodade svenska månadsnamn. strftime("%b") beror på systemets locale och ger "Oct" på CI.
 MONTH_NAMES_SV = [
@@ -146,3 +157,45 @@ def group_breakdown(df: pd.DataFrame, column: str) -> pd.DataFrame:
         forvantad_forlust_nasta_manad=("forvantad_forlust_nasta_manad", "sum"),
     )
     return grouped.sort_values("forvantad_forlust_nasta_manad", ascending=False).reset_index()
+
+
+def with_new_customers(
+    forecast: pd.DataFrame,
+    monthly_risk: float,
+    mock: dict = NEW_CUSTOMER_MOCK,
+    seed: int = RANDOM_STATE,
+) -> pd.DataFrame:
+    """Lägg mockad nykundsförsäljning på en prognos från revenue_forecast.
+
+    Antalet nya kunder månad m är en seedad slumpvariabel inom ±spread kring trenden
+    start × (1 + growth)^(m − 1), så tillväxten ökar successivt. Varje kohort rullas sedan
+    fram med (1 − monthly_risk)^k precis som de befintliga kunderna.
+
+    Nya kolumner: new_customers (nya just den månaden), new_mrr (MRR från alla nykohorter
+    som är kvar) och total_mrr (expected_mrr + new_mrr). Månad 0 har inga nykunder.
+    monthly_risk utanför [0, 1] ger ValueError.
+    """
+    for column in ("months_ahead", "expected_mrr"):
+        if column not in forecast.columns:
+            raise KeyError(f"Kolumnen {column!r} finns inte i prognosen")
+    if not 0 <= monthly_risk <= 1:
+        raise ValueError(f"monthly_risk måste ligga i [0, 1], fick {monthly_risk}")
+
+    rng = np.random.default_rng(seed)
+    months = forecast["months_ahead"].to_numpy()
+    trend = mock["start"] * (1 + mock["growth"]) ** (months - 1)
+    noise = rng.uniform(1 - mock["spread"], 1 + mock["spread"], size=len(months))
+    new_customers = np.where(months == 0, 0, np.rint(trend * noise)).astype(int)
+
+    new_mrr = []
+    for m in months:
+        # Kohorten från månad k har (1 - risk)^(m - k) av sina kunder kvar i månad m.
+        earlier = (months >= 1) & (months <= m)
+        kept = new_customers[earlier] * (1 - monthly_risk) ** (m - months[earlier])
+        new_mrr.append(kept.sum() * mock["monthly_charge"])
+
+    out = forecast.copy()
+    out["new_customers"] = new_customers
+    out["new_mrr"] = new_mrr
+    out["total_mrr"] = out["expected_mrr"] + out["new_mrr"]
+    return out

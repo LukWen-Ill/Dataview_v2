@@ -10,11 +10,13 @@ import pytest
 
 from src.dashboard import (
     GROUP_COLUMNS,
+    NEW_CUSTOMER_MOCK,
     active_customers,
     filter_customers,
     group_breakdown,
     kpis,
     revenue_forecast,
+    with_new_customers,
 )
 from src.data import TARGET_COLUMN, TENURE_LABELS
 from tests.conftest import make_raw_df
@@ -266,3 +268,50 @@ def test_group_breakdown_utan_aktiva_kunder_ger_valueerror(customers):
     customers[TARGET_COLUMN] = "Yes"
     with pytest.raises(ValueError, match="aktiva"):
         group_breakdown(customers, "Contract")
+
+
+# Mock utan slump så att nykundstalen kan räknas för hand.
+FLAT_MOCK = {"start": 100, "growth": 0.1, "spread": 0.0, "monthly_charge": 10.0}
+
+
+def test_with_new_customers_handraknade_varden(three_customers):
+    forecast = revenue_forecast(three_customers, months=3, start=START)
+    result = with_new_customers(forecast, monthly_risk=0.5, mock=FLAT_MOCK)
+    assert list(result["new_customers"]) == [0, 100, 110, 121]
+    # m = 1: 100 kunder * 10. m = 2: 100 * 0.5 + 110 kvar. m = 3: 100 * 0.25 + 110 * 0.5 + 121.
+    assert list(result["new_mrr"]) == pytest.approx([0.0, 1000.0, 1600.0, 2010.0])
+    assert result["total_mrr"].tolist() == pytest.approx(
+        (result["expected_mrr"] + result["new_mrr"]).tolist()
+    )
+
+
+def test_with_new_customers_manad_noll_har_inga_nykunder(three_customers):
+    forecast = revenue_forecast(three_customers, months=6, start=START)
+    result = with_new_customers(forecast, monthly_risk=0.2)
+    assert result.loc[0, "new_customers"] == 0
+    assert result.loc[0, "new_mrr"] == 0.0
+    assert result.loc[0, "total_mrr"] == forecast.loc[0, "expected_mrr"]
+
+
+def test_with_new_customers_ar_deterministisk_och_vaxer(three_customers):
+    forecast = revenue_forecast(three_customers, months=24, start=START)
+    first = with_new_customers(forecast, monthly_risk=0.2)
+    second = with_new_customers(forecast, monthly_risk=0.2)
+    pd.testing.assert_frame_equal(first, second)
+    new = first["new_customers"].iloc[1:]
+    trend = NEW_CUSTOMER_MOCK["start"] * (1 + NEW_CUSTOMER_MOCK["growth"]) ** np.arange(24)
+    spread = NEW_CUSTOMER_MOCK["spread"]
+    assert ((new >= trend * (1 - spread) - 1) & (new <= trend * (1 + spread) + 1)).all()
+    assert new.iloc[-1] > new.iloc[0]  # trenden slår igenom trots slumpen
+
+
+def test_with_new_customers_risk_utanfor_intervall_ger_valueerror(three_customers):
+    forecast = revenue_forecast(three_customers, months=3, start=START)
+    with pytest.raises(ValueError, match="monthly_risk"):
+        with_new_customers(forecast, monthly_risk=1.5)
+
+
+def test_with_new_customers_saknad_kolumn_ger_keyerror(three_customers):
+    forecast = revenue_forecast(three_customers, months=3, start=START)
+    with pytest.raises(KeyError, match="expected_mrr"):
+        with_new_customers(forecast.drop(columns=["expected_mrr"]), monthly_risk=0.2)

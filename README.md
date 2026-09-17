@@ -156,8 +156,11 @@ tolkas som risk per månad. Varje aktiv kund (`Churn = No`) rullas fram med (1 �
 m = 0–24 månader. Kvarvarande MRR är Σ MonthlyCharges × (1 − p)^m och förlusten en månad
 är skillnaden mot månaden före. Beräkningarna ligger i `src/dashboard.py`; sidan
 `pages/5_Ledning.py` visar bara resultatet och tränar ingenting om.
-Prognosen gäller bara dagens aktiva kunder, antar konstant churn-risk per kund och månad,
-frysta priser och ingen nykundsförsäljning. Den visar vad som händer om vi inte gör något.
+Blå och röd linje gäller bara dagens aktiva kunder och visar vad som händer om vi inte gör
+något. Grön linje lägger till en **mockad nykundsförsäljning** (`NEW_CUSTOMER_MOCK` i
+`src/dashboard.py`): ca 600 nya kunder månad 1 (datasetets senaste kohort), +5 % per månad
+med ±20 % seedad slump, 50 $ per kund och samma churn-risk som de befintliga. Hela prognosen
+antar konstant churn-risk per kund och månad samt frysta priser.
 Sannolikheterna är inte kalibrerade (`class_weight="balanced"`), så kurvan är brant.
 
 ## Tester och lint
