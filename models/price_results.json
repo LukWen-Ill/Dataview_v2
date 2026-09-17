@@ -1,0 +1,64 @@
+{
+  "created_at": "2026-09-17T16:35:15",
+  "random_state": 42,
+  "cv_folds": 5,
+  "scoring": "r2",
+  "target": "MonthlyCharges",
+  "feature_columns": [
+    "SeniorCitizen",
+    "tenure",
+    "gender",
+    "Partner",
+    "Dependents",
+    "PhoneService",
+    "MultipleLines",
+    "InternetService",
+    "OnlineSecurity",
+    "OnlineBackup",
+    "DeviceProtection",
+    "TechSupport",
+    "StreamingTV",
+    "StreamingMovies",
+    "Contract",
+    "PaperlessBilling",
+    "PaymentMethod"
+  ],
+  "split": {
+    "n_train": 4225,
+    "n_validation": 1409,
+    "n_test": 1409
+  },
+  "models": [
+    {
+      "model": "Prismodell: Linjär regression",
+      "best_params": {
+        "regressor__positive": true
+      },
+      "cv_r2": 0.9988127453334388,
+      "validation": {
+        "mae": 0.7798917817535859,
+        "rmse": 1.0329128159793297,
+        "r2": 0.9988587575974271
+      }
+    },
+    {
+      "model": "Prismodell: Random forest",
+      "best_params": {
+        "regressor__max_depth": 10,
+        "regressor__n_estimators": 200
+      },
+      "cv_r2": 0.9975162825746976,
+      "validation": {
+        "mae": 0.975216734434464,
+        "rmse": 1.356218098238463,
+        "r2": 0.9980325231159468
+      }
+    }
+  ],
+  "best_model": "Prismodell: Linjär regression",
+  "test": {
+    "mae": 0.7788844878863829,
+    "rmse": 1.0134614325371394,
+    "r2": 0.9988501794039699
+  }
+}
