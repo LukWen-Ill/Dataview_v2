@@ -88,8 +88,8 @@ c6.metric(f"Månadsintäkt om {horizon} mån", money(forecast["total_mrr"].iloc[
 
 st.subheader(f"Prognos {horizon} månader framåt")
 # Två serier i långt format så att Altair kan färga dem. Blå = dagens kunder plus mockade
-# nykunder, röd = förväntad förlust per månad på hela den blå linjen.
-SERIES = {"total_mrr": "Månadsintäkt", "total_loss": "Väntad förlust per månad"}
+# nykunder, röd = bara dagens kunder. Båda startar i dagens månadsintäkt; gapet är nykunderna.
+SERIES = {"total_mrr": "Månadsintäkt", "expected_mrr": "Dagens kunder utan nykunder"}
 long = forecast.rename(columns=SERIES).melt(
     id_vars=["months_ahead", "month_label"],
     value_vars=list(SERIES.values()),

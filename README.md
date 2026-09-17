@@ -142,7 +142,7 @@ felmeddelande med träningskommandot.
 
 | Sida | Innehåll |
 |---|---|
-| Dashboard (extra, startsida) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för förväntad förlust per månad, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, ett kort per grupp med churn-risk |
+| Dashboard (extra, startsida) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för dagens kunders intäkt utan nykunder, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, ett kort per grupp med churn-risk |
 | Översikt | Antal kunder, churn-andel, vald modell, testresultat, modelljämförelse |
 | Data | EDA: churn per kategori, kundtid, månadskostnad, korrelationer |
 | Modeller | Jämförelse på validation, slutresultat på test, threshold-slider med confusion matrix, ROC-kurva, classification report, feature importance |
@@ -157,8 +157,8 @@ m = 0–12 månader (horisont 3, 6 eller 12 väljs på sidan). Kvarvarande MRR �
 Σ MonthlyCharges × (1 − p)^m och förlusten en månad är skillnaden mot månaden före. Beräkningarna ligger i `src/dashboard.py`; sidan
 `Dashboard.py` visar bara resultatet och tränar ingenting om.
 Blå linje är dagens aktiva kunders kvarvarande intäkt plus en **mockad nykundsförsäljning**;
-röd linje är den förväntade förlusten per månad på hela den blå linjen, räknad med
-churn-risken. Nykundsmocken (`NEW_CUSTOMER_MOCK` i
+röd linje är dagens kunders kvarvarande intäkt utan nykunder, så gapet mellan linjerna
+är nykundernas bidrag. Förlusten per månad visas i tooltipen. Nykundsmocken (`NEW_CUSTOMER_MOCK` i
 `src/dashboard.py`): ca 600 nya kunder månad 1 (datasetets senaste kohort), +5 % per månad
 med ±20 % seedad slump, 50 $ per kund och samma churn-risk som de befintliga. Hela prognosen
 antar konstant churn-risk per kund och månad samt frysta priser.
