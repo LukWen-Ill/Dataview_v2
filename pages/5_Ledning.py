@@ -31,18 +31,22 @@ customers = customers.assign(segment=labels)
 # Sista rutan styr tabellen längst ned; den ligger här så att alla anrop kan göras i ett svep.
 FILTER_COLUMNS = ["Contract", "InternetService", "PaymentMethod", "segment"]
 FILTER_LABELS = {"segment": "Segment"}  # övriga kolumner visas med sitt kolumnnamn
-f1, f2, f3, f4, f5 = st.columns(5)
+HORIZONS = [3, 6, 12]  # månader framåt i grafen, max 12
+f1, f2, f3, f4, f5, f6 = st.columns(6)
 filters = {}
 for col, box in zip(FILTER_COLUMNS, (f1, f2, f3, f4), strict=True):
     filters[col] = box.multiselect(FILTER_LABELS.get(col, col), sorted(customers[col].unique()))
-group_column = f5.selectbox("Gruppera tabellen på", GROUP_COLUMNS, index=0)
+horizon = f5.selectbox("Horisont (månader)", HORIZONS, index=len(HORIZONS) - 1)
+group_column = f6.selectbox("Gruppera tabellen på", GROUP_COLUMNS, index=0)
 
 # Alla beräkningar sker i src/dashboard.py. Ett filter utan kunder ger ValueError.
 try:
     selected = filter_customers(customers, filters)
     numbers = kpis(selected)
     # Mockade nykunder rullas fram med samma medelrisk som de filtrerade kunderna.
-    forecast = with_new_customers(revenue_forecast(selected), numbers["predicted_churn_rate"])
+    forecast = with_new_customers(
+        revenue_forecast(selected, months=horizon), numbers["predicted_churn_rate"]
+    )
     table = group_breakdown(selected, group_column)
 except ValueError:
     st.warning("Inga kunder matchar filtret.")
@@ -59,48 +63,57 @@ c2.metric("Förväntad förlust nästa månad", money(numbers["expected_loss_nex
 c3.metric("Faktisk förlust senaste månaden", money(numbers["actual_loss_last_month"]), border=True)
 c4.metric("Predikterad churn", f"{numbers['predicted_churn_rate']:.1%}", border=True)
 c5.metric("Aktiva kunder", f"{numbers['n_customers']:,}".replace(",", " "), border=True)
-c6.metric("MRR månad 24 inkl. nykunder", money(forecast["total_mrr"].iloc[-1]), border=True)
+c6.metric(f"MRR månad {horizon} inkl. nykunder", money(forecast["total_mrr"].iloc[-1]), border=True)
 
-st.subheader("Intäktsprognos 24 månader framåt")
+st.subheader(f"Intäktsprognos {horizon} månader framåt")
 # Två serier i långt format så att Altair kan färga dem. Blå = dagens kunder plus mockade
 # nykunder, röd = förväntad förlust per månad på hela den blå linjen.
-# Kopiorna behövs för att beloppen också ska finnas kvar som tooltip-kolumner.
-long = forecast.assign(
-    **{
-        "Intäkt inkl. nykunder": forecast["total_mrr"],
-        "Förväntad förlust per månad": forecast["total_loss"],
-    }
-).melt(
-    id_vars=[
-        "months_ahead",
-        "month_label",
-        "expected_customers",
-        "expected_mrr",
-        "expected_loss",
-        "cumulative_loss",
-        "new_customers",
-        "new_mrr",
-        "total_mrr",
-        "total_loss",
-    ],
-    value_vars=["Intäkt inkl. nykunder", "Förväntad förlust per månad"],
+SERIES = {"total_mrr": "Intäkt inkl. nykunder", "total_loss": "Förväntad förlust per månad"}
+long = forecast.rename(columns=SERIES).melt(
+    id_vars=["months_ahead", "month_label"],
+    value_vars=list(SERIES.values()),
     var_name="serie",
     value_name="belopp",
 )
-chart = (
+HEIGHT = 350
+x_axis = alt.X(
+    "month_label:O",
+    sort=alt.SortField("months_ahead"),
+    title="Månad",
+    axis=alt.Axis(grid=True, labelAngle=0),  # en lodrät rutnätslinje per månad
+)
+# Hover-markering per månad: en osynlig stapel över hela höjden fångar pekaren var som helst
+# i kolumnen, så tooltipen visas utan att man behöver träffa en punkt på linjen.
+hover = alt.selection_point(fields=["month_label"], on="pointerover", empty=False)
+lines = (
     alt.Chart(long)
-    .mark_line(point=True)
+    .mark_line()
     .encode(
-        x=alt.X("month_label:O", sort=alt.SortField("months_ahead"), title="Månad"),
+        x=x_axis,
         y=alt.Y("belopp:Q", title="Belopp ($)"),
         color=alt.Color(
             "serie:N",
             title=None,
-            scale=alt.Scale(
-                domain=["Intäkt inkl. nykunder", "Förväntad förlust per månad"],
-                range=["#4c78a8", "#e45756"],
-            ),
+            scale=alt.Scale(domain=list(SERIES.values()), range=["#4c78a8", "#e45756"]),
         ),
+    )
+)
+points = lines.mark_point(filled=True, size=80).encode(
+    opacity=alt.condition(hover, alt.value(1), alt.value(0))
+)
+rule = (
+    alt.Chart(forecast)
+    .mark_rule(color="gray", strokeDash=[4, 4])
+    .encode(x=x_axis)
+    .transform_filter(hover)
+)
+bands = (
+    alt.Chart(forecast)
+    .mark_bar(opacity=0)
+    .encode(
+        x=x_axis,
+        y=alt.value(0),
+        y2=alt.value(HEIGHT),
         tooltip=[
             alt.Tooltip("month_label:O", title="Månad"),
             alt.Tooltip("total_mrr:Q", format=",.0f", title="Intäkt inkl. nykunder"),
@@ -112,8 +125,9 @@ chart = (
             alt.Tooltip("new_customers:Q", format=",.0f", title="Nya kunder denna månad (mock)"),
         ],
     )
-    .properties(height=350)
+    .add_params(hover)
 )
+chart = alt.layer(lines, points, rule, bands).properties(height=HEIGHT)
 st.altair_chart(chart, width="stretch")
 st.caption(
     "Blå linje är dagens aktiva kunders kvarvarande intäkt plus en mockad nykundsförsäljning. "

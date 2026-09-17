@@ -104,8 +104,8 @@ churn-modellen svarar på "vilka enskilda kunder riskerar att lämna?".
 
 ### 2.6 Ledningsvy (extra, utanför kursens krav)
 
-Sidan Ledning blickar framåt: varje aktiv kund (Churn = No) rullas fram 24 månader med
-sannolikheten (1 − p)^m att vara kvar, där p är modellens churn-sannolikhet, och summerar
+Sidan Ledning blickar framåt: varje aktiv kund (Churn = No) rullas fram upp till 12 månader
+(valbar horisont) med sannolikheten (1 − p)^m att vara kvar, där p är modellens churn-sannolikhet, och summerar
 kvarvarande månadsintäkt och förväntad förlust. Blå linje är dagens aktiva kunders
 kvarvarande intäkt plus en mockad nykundsförsäljning; röd linje är den förväntade
 förlusten per månad på hela den blå linjen, räknad med churn-risken. Nykundsmocken
