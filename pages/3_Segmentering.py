@@ -25,8 +25,9 @@ K-Means och projiceras med **PCA** till två dimensioner - bara för att kunna r
 )
 
 st.subheader("Hur många kluster?")
+simple = st.toggle("Klustra bara på tenure(antal månader kunden varit kund), månadskostnad och tilläggstjänster")
 with st.spinner("Beräknar inertia och silhouette för k = 2–8 …"):
-    scores = load_or_stop(get_kmeans_scores, "klusterpoängen")
+    scores = load_or_stop(lambda: get_kmeans_scores(simple), "klusterpoängen")
 st.pyplot(plot_elbow_and_silhouette(scores), width="stretch")
 st.caption(
     "Elbow-metoden: inertia (summan av kvadratavstånd till närmaste centroid) sjunker alltid när k "
@@ -37,7 +38,7 @@ st.caption(
 )
 
 k = st.slider("Antal kluster (k)", min_value=2, max_value=8, value=DEFAULT_K)
-labels, coords, explained = get_segments(k)
+labels, coords, explained = get_segments(k, simple)
 
 left, right = st.columns([1, 1])
 with left:

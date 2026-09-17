@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from src import data, db, model, train
-from src.segment import fit_segments, kmeans_scores, preprocess_for_clustering
+from src.segment import fit_segments, kmeans_scores, preprocess_for_clustering, SIMPLE_FEATURES
 
 TRAIN_HINT = "Träna modellen först: `python -m src.train`"
 
@@ -44,13 +44,15 @@ def get_test_predictions() -> pd.DataFrame:
 
 
 @st.cache_data
-def get_kmeans_scores() -> pd.DataFrame:
-    return kmeans_scores(preprocess_for_clustering(get_customers()))
+def get_kmeans_scores(simple: bool = False) -> pd.DataFrame:
+    columns = SIMPLE_FEATURES if simple else None
+    return kmeans_scores(preprocess_for_clustering(get_customers(), columns))
 
 
 @st.cache_data
-def get_segments(k: int):
-    return fit_segments(preprocess_for_clustering(get_customers()), k)
+def get_segments(k: int, simple: bool = False):
+    columns = SIMPLE_FEATURES if simple else None
+    return fit_segments(preprocess_for_clustering(get_customers(), columns), k)
 
 
 def load_or_stop(loader, what: str):
