@@ -17,6 +17,7 @@ from matplotlib.figure import Figure
 from sklearn.cluster import KMeans
 from sklearn.decomposition import PCA
 from sklearn.metrics import silhouette_score
+from sklearn.preprocessing import StandardScaler
 
 from src.data import TARGET_COLUMN, prepare_features
 from src.features import build_preprocessor
@@ -25,12 +26,15 @@ from src.models import RANDOM_STATE
 DEFAULT_K = 4
 K_RANGE = range(2, 9)
 SILHOUETTE_SAMPLE_SIZE = 2000  # silhouette är O(n^2); ett urval räcker för att välja k
+SIMPLE_FEATURES = ["tenure", "MonthlyCharges", "num_addon_services"]
 
 
-def preprocess_for_clustering(df: pd.DataFrame) -> np.ndarray:
-    """Rådata -> skalad, one-hot-kodad matris. K-Means bygger på avstånd, så skalning krävs."""
+def preprocess_for_clustering(df: pd.DataFrame, columns=None) -> np.ndarray:
     X = prepare_features(df)
-    return build_preprocessor().fit_transform(X)
+    if columns is None:
+        return build_preprocessor().fit_transform(X)
+    return StandardScaler().fit_transform(X[columns])
+        
 
 
 def kmeans_scores(
