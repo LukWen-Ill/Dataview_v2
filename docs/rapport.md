@@ -102,9 +102,9 @@ Segment 1 – nya kunder med månadsavtal, hög kostnad och få tjänster – ä
 mest. Segmenteringen är icke-vägledd och svarar på "vilka kundtyper har vi?", medan
 churn-modellen svarar på "vilka enskilda kunder riskerar att lämna?".
 
-### 2.6 Ledningsvy (extra, utanför kursens krav)
+### 2.6 Dashboard (extra, utanför kursens krav)
 
-Sidan Ledning blickar framåt: varje aktiv kund (Churn = No) rullas fram upp till 12 månader
+Startsidan Dashboard blickar framåt: varje aktiv kund (Churn = No) rullas fram upp till 12 månader
 (valbar horisont) med sannolikheten (1 − p)^m att vara kvar, där p är modellens churn-sannolikhet, och summerar
 kvarvarande månadsintäkt och förväntad förlust. Blå linje är dagens aktiva kunders
 kvarvarande intäkt plus en mockad nykundsförsäljning; röd linje är den förväntade
@@ -146,9 +146,10 @@ importance/koefficienter med korrekta namn efter one-hot.
 silhouette score, PCA till två komponenter (49 % förklarad varians) för visualisering,
 segmentprofiler.
 
-**Frontend.** Streamlit med sex sidor: Översikt, Data (EDA med Altair), Modeller
+**Frontend.** Streamlit med sex sidor: Dashboard (extra: intäktsprognos, startsida), Översikt, Data (EDA
+med Altair), Modeller
 (jämförelse, test, threshold-slider, feature importance), Segmentering, Prediktera (formulär
-och CSV-batch, loggning till databasen), Ledning (extra: intäktsprognos).
+och CSV-batch, loggning till databasen).
 
 **Kvalitet.** 162 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
 felfallstester för saknad fil/kolumn/modell/databas, ogiltig target, okänd kategori,

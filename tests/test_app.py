@@ -13,12 +13,12 @@ from streamlit.testing.v1 import AppTest
 
 ROOT = Path(__file__).resolve().parents[1]
 PAGES = [
-    ROOT / "app.py",
+    ROOT / "Dashboard.py",
+    ROOT / "pages" / "0_Översikt.py",
     ROOT / "pages" / "1_Data.py",
     ROOT / "pages" / "2_Modeller.py",
     ROOT / "pages" / "3_Segmentering.py",
     ROOT / "pages" / "4_Prediktera.py",
-    ROOT / "pages" / "5_Ledning.py",
 ]
 
 
@@ -48,13 +48,13 @@ def test_page_has_a_title(page):
 
 
 def test_overview_reports_model_metrics():
-    at = run_page(PAGES[0])
+    at = run_page(PAGES[1])
     labels = {m.label for m in at.metric}
     assert {"ROC-AUC", "Recall", "Precision", "Vald modell"} <= labels
 
 
 def test_predict_page_makes_a_prediction_with_default_values():
-    at = run_page(PAGES[4])
+    at = run_page(PAGES[5])
     at.button[0].click().run()
     assert not at.exception, [str(e) for e in at.exception]
     labels = {m.label for m in at.metric}
@@ -66,7 +66,7 @@ def test_app_stops_with_error_when_model_is_missing(monkeypatch, tmp_path):
     import src.model as model_module
 
     monkeypatch.setattr(model_module, "DEFAULT_MODEL_PATH", tmp_path / "finns-inte.joblib")
-    at = run_page(PAGES[4])
+    at = run_page(PAGES[5])
     assert not at.exception
     assert at.error and "src.train" in at.error[0].value
 
@@ -78,7 +78,7 @@ def test_app_stops_with_error_when_data_is_missing(monkeypatch, tmp_path):
 
     monkeypatch.setattr(db_module, "DEFAULT_DB_PATH", tmp_path / "finns-inte.db")
     monkeypatch.setattr(data_module, "DEFAULT_DATA_PATH", tmp_path / "finns-inte.csv")
-    at = run_page(PAGES[0])
+    at = run_page(PAGES[1])
     assert not at.exception
     assert at.error and "Kunde inte ladda" in at.error[0].value
 
@@ -109,17 +109,17 @@ def test_customers_with_predictions_raises_when_model_is_missing(monkeypatch, tm
         get_customers_with_predictions()
 
 
-def test_ledning_page_shows_kpis_and_table():
+def test_dashboard_page_shows_kpis_and_table():
     """Default-filter (tomma listor) ska ge KPI-rad, graf och tabell utan fel."""
-    at = run_page(PAGES[5])
+    at = run_page(PAGES[0])
     assert not at.exception, [str(e) for e in at.exception]
     labels = {m.label for m in at.metric}
     assert "MRR idag" in labels
     assert len(at.dataframe) >= 1
 
 
-def test_ledning_page_has_segment_filter():
-    at = run_page(PAGES[5])
+def test_dashboard_page_has_segment_filter():
+    at = run_page(PAGES[0])
     assert not at.exception, [str(e) for e in at.exception]
     assert "Segment" in {m.label for m in at.multiselect}
 

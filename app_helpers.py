@@ -39,7 +39,7 @@ def get_results() -> dict:
 def get_customers_with_predictions() -> pd.DataFrame:
     """Kundtabellen med kolumnen churn_probability från den sparade modellen.
 
-    Alla kunder får en sannolikhet, även de som redan lämnat - Ledning-sidan filtrerar
+    Alla kunder får en sannolikhet, även de som redan lämnat - Dashboard-sidan filtrerar
     själv via src/dashboard.py. Radordningen är samma som i get_customers().
     """
     customers = get_customers()

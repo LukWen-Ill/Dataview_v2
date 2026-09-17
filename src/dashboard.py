@@ -1,6 +1,6 @@
-"""Hjälpfunktioner för Ledning-sidan i appen. Bara filtrering och aggregering, ingen modellering.
+"""Hjälpfunktioner för Dashboard-sidan i appen. Bara filtrering och aggregering, ingen modellering.
 
-Modulen har samma roll för Ledning-sidan som src/eda.py har för Data-sidan: sidan skickar in
+Modulen har samma roll för Dashboard-sidan som src/eda.py har för Data-sidan: sidan skickar in
 kundtabellen, får tillbaka färdiga tal och tabeller att visa. Ingen Streamlit-import här –
 det gör att funktionerna kan testas utan appen.
 """
@@ -15,10 +15,10 @@ import pandas as pd
 from src.data import TARGET_COLUMN, add_features, clean
 from src.models import RANDOM_STATE
 
-# Kolumner som Ledning-sidan får gruppera på. tenure_group skapas av add_features.
+# Kolumner som Dashboard-sidan får gruppera på. tenure_group skapas av add_features.
 GROUP_COLUMNS = ["Contract", "InternetService", "PaymentMethod", "tenure_group"]
 
-# Mockad nykundsförsäljning för Ledning-sidan. Startnivån är datasetets senaste kohort:
+# Mockad nykundsförsäljning för Dashboard-sidan. Startnivån är datasetets senaste kohort:
 # 613 kunder med kundtid 1 månad, snitt 50 $/mån. Tillväxt och slumpspann är påhittade.
 NEW_CUSTOMER_MOCK = {
     "start": 600,  # nya kunder månad 1
@@ -121,7 +121,7 @@ def revenue_forecast(df: pd.DataFrame, months: int = 24, start: date | None = No
 
 
 def kpis(df: pd.DataFrame) -> dict:
-    """Nyckeltal för Ledning-sidan. Vanliga Python-typer så att st.metric och json fungerar.
+    """Nyckeltal för Dashboard-sidan. Vanliga Python-typer så att st.metric och json fungerar.
 
     Allt utom actual_loss_last_month räknas på aktiva kunder. actual_loss_last_month är
     månadsintäkten från de kunder som redan lämnat (Churn = Yes).

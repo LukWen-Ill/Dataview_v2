@@ -32,8 +32,8 @@ I scope:
 - Binär klassificering med tre modeller (logistisk regression, beslutsträd, random forest)
   i sklearn-`Pipeline`, små grids i `GridSearchCV` med 5-fold CV.
 - 60/20/20 stratifierad split. Testmängden används bara för slutlig utvärdering.
-- Streamlit med sex sidor: Översikt, Data (EDA), Modeller, Segmentering, Prediktera,
-  Ledning (extra).
+- Streamlit med sex sidor: Dashboard (extra, startsida), Översikt, Data (EDA), Modeller,
+  Segmentering, Prediktera.
 - K-Means + PCA för kundsegmentering.
 - CI på GitHub Actions: lint, tester, end-to-end-träning.
 
@@ -56,16 +56,16 @@ src/train.py               hela träningsflödet (CLI: python -m src.train)
 src/evaluate.py            metrics, threshold, confusion matrix, ROC, feature importance
 src/segment.py             K-Means, PCA, segmentprofiler
 src/eda.py                 aggregeringar för EDA-sidan
-src/dashboard.py           filtrering, prognos och nyckeltal för Ledning-sidan (extra)
-app.py, pages/, app_helpers.py   Streamlit – bara presentation
-pages/5_Ledning.py         Ledning-sidan (extra)
+src/dashboard.py           filtrering, prognos och nyckeltal för Dashboard-sidan (extra)
+Dashboard.py               Streamlit: startsida, intäktsprognos (extra)
+pages/, app_helpers.py     Streamlit – bara presentation
 tests/                     pytest
 docs/rapport.md            teknisk rapport
 ```
 
 ## Arbetssätt
 
-- **Code-first.** All ML-logik i `src/`. `app.py`, `pages/` och `app_helpers.py` visar bara
+- **Code-first.** All ML-logik i `src/`. `Dashboard.py`, `pages/` och `app_helpers.py` visar bara
   resultat. Aggregeringar för grafer får ligga i `src/eda.py`.
 - **Alternativ A för modellen.** `python -m src.train` skapar `models/*` som checkas in.
   Appen laddar den sparade modellen och kör aldrig GridSearchCV. Träna om och committa när
@@ -87,7 +87,7 @@ pip install -r requirements-dev.txt
 
 python -m src.db             # bygg data/churn.db från CSV:n
 python -m src.train          # träna, jämför, spara models/* och logga i databasen
-streamlit run app.py         # starta appen (laddar sparad modell)
+streamlit run Dashboard.py         # starta appen (laddar sparad modell)
 pytest --cov=src             # tester med täckningskrav
 ruff check . && ruff format --check .
 ```

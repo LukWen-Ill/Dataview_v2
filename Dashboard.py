@@ -1,4 +1,8 @@
-"""Ledning. Intäktsprognos byggd på modellens churn-sannolikheter. Bara presentation."""
+"""Streamlit-appens startsida: Dashboard med intäktsprognos. Kör: streamlit run Dashboard.py
+
+Övriga sidor ligger i pages/. All ML-logik ligger i src/ - sidorna visar bara resultat.
+Bygger på modellens churn-sannolikheter. Bara presentation.
+"""
 
 from __future__ import annotations
 
@@ -17,8 +21,8 @@ from src.dashboard import (
 )
 from src.segment import DEFAULT_K
 
-st.set_page_config(page_title="Ledning", page_icon="📈", layout="wide")
-st.title("📈 Ledning – intäktsprognos")
+st.set_page_config(page_title="Dashboard", page_icon="📈", layout="wide")
+st.title("📈 Dashboard – intäktsprognos")
 
 customers = load_or_stop(get_customers_with_predictions, "kunddatan och modellen")
 

@@ -16,7 +16,7 @@ Projektarbete Del 2 i kursen *AI – teori och tillämpning, del 1* (NBI/Handels
   Användaren väljer threshold och ser hur avvägningen mellan precision och recall ändras.
 - **Vilka typer av kunder har vi?** – K-Means grupperar kunderna i segment som sedan
   tolkas med churn-andel per segment.
-- **Hur mycket intäkt förväntas gå förlorad?** (extra – inte ett kurskrav) – Ledning-sidan
+- **Hur mycket intäkt förväntas gå förlorad?** (extra – inte ett kurskrav) – Dashboard-sidan
   rullar fram dagens aktiva kunder upp till 12 månader med modellens sannolikheter.
 
 Hela flödet:
@@ -70,9 +70,9 @@ src/train.py               hela träningsflödet – börja läsa här
 src/evaluate.py            metrics, threshold-tabell, confusion matrix, ROC, feature importance
 src/segment.py             K-Means, elbow/silhouette, PCA, segmentprofiler
 src/eda.py                 aggregeringar för EDA-sidan
-src/dashboard.py           filtrering, intäktsprognos och nyckeltal för Ledning-sidan (extra)
-app.py                     Streamlit: startsida (översikt)
-pages/                     Streamlit: Data, Modeller, Segmentering, Prediktera, Ledning (extra)
+src/dashboard.py           filtrering, intäktsprognos och nyckeltal för Dashboard-sidan (extra)
+Dashboard.py               Streamlit: startsida, intäktsprognos (extra)
+pages/                     Streamlit: Översikt, Data, Modeller, Segmentering, Prediktera
 app_helpers.py             cachade laddningsfunktioner för sidorna
 tests/                     pytest (162 tester)
 docs/rapport.md            teknisk rapport
@@ -134,7 +134,7 @@ Träna om när koden i `src/` ändras.
 ## Streamlit
 
 ```bash
-streamlit run app.py
+streamlit run Dashboard.py
 ```
 
 Appen laddar den sparade modellen – den tränar aldrig själv. Saknas modellen visas ett
@@ -142,20 +142,20 @@ felmeddelande med träningskommandot.
 
 | Sida | Innehåll |
 |---|---|
+| Dashboard (extra, startsida) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för förväntad förlust per månad, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, sorterbar tabell per grupp |
 | Översikt | Antal kunder, churn-andel, vald modell, testresultat, modelljämförelse |
 | Data | EDA: churn per kategori, kundtid, månadskostnad, korrelationer |
 | Modeller | Jämförelse på validation, slutresultat på test, threshold-slider med confusion matrix, ROC-kurva, classification report, feature importance |
 | Segmentering | Elbow och silhouette, K-Means-kluster i PCA-rummet, segmentprofiler med churn-andel |
 | Prediktera | En kund via formulär (loggas i databasen) eller många via CSV, med valbar threshold |
-| Ledning (extra) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för förväntad förlust per månad, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, sorterbar tabell per grupp |
 
-### Ledning (extra – inte ett kurskrav)
+### Dashboard (extra – inte ett kurskrav)
 
 `Churn = Yes` i datasettet betyder "lämnade senaste månaden", så modellens sannolikhet p
 tolkas som risk per månad. Varje aktiv kund (`Churn = No`) rullas fram med (1 − p)^m för
 m = 0–12 månader (horisont 3, 6 eller 12 väljs på sidan). Kvarvarande MRR är
 Σ MonthlyCharges × (1 − p)^m och förlusten en månad är skillnaden mot månaden före. Beräkningarna ligger i `src/dashboard.py`; sidan
-`pages/5_Ledning.py` visar bara resultatet och tränar ingenting om.
+`Dashboard.py` visar bara resultatet och tränar ingenting om.
 Blå linje är dagens aktiva kunders kvarvarande intäkt plus en **mockad nykundsförsäljning**;
 röd linje är den förväntade förlusten per månad på hela den blå linjen, räknad med
 churn-risken. Nykundsmocken (`NEW_CUSTOMER_MOCK` i
