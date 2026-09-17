@@ -48,4 +48,13 @@ def price_list(pipeline) -> pd.DataFrame:
     """Vad varje tjänst kostar per månad, enligt modellens koefficienter"""
     names = pipeline.named_steps["onehot"].get_feature_names_out()
     coefs = pipeline.named_steps["regressor"].coef_
-    return pd.DataFrame({"tjanst": names, "USD_per_monad": coefs}).sort_values("USD_per_monad", ascending=False)
+
+    table = pd.DataFrame({
+        "tjanst": [n.split("_", 1)[0] for n in names],
+        "varde": [n.split("_", 1)[0] for n in names],
+        "koefficient": coefs,
+    })
+
+    spann = table.groupby("tjanst")["koefficient"].agg(["max", "min"])
+    spann["USD_per_manad"] = spann["max"] - spann["min"]
+    return spann[["USD_per_manad"]].sort_values("USD_per_manad", ascending=False)
