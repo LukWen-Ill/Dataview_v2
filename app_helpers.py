@@ -7,7 +7,7 @@ import json
 import pandas as pd
 import streamlit as st
 
-from src import data, db, model, train
+from src import data, db, model, price, risk, train
 from src.segment import fit_segments, kmeans_scores, preprocess_for_clustering
 
 TRAIN_HINT = "Träna modellen först: `python -m src.train`"
@@ -25,6 +25,12 @@ def get_customers() -> pd.DataFrame:
 def get_model():
     """Den sparade slutmodellen. Appen tränar aldrig själv."""
     return model.load(model.DEFAULT_MODEL_PATH)
+
+
+@st.cache_resource
+def get_price_model():
+    """Den sparade prismodellen (extra, regression på MonthlyCharges). Appen tränar aldrig själv."""
+    return price.load_price_model(price.PRICE_MODEL_PATH)
 
 
 @st.cache_data
@@ -51,6 +57,43 @@ def get_kmeans_scores() -> pd.DataFrame:
 @st.cache_data
 def get_segments(k: int):
     return fit_segments(preprocess_for_clustering(get_customers()), k)
+
+
+# --- Säljverktyget: risknivåer, befintliga kunder och segmentjämförelse ---
+
+
+@st.cache_data
+def get_customer_probabilities() -> pd.Series:
+    """Churnmodellens sannolikhet för varje kund i träningsdatan.
+
+    predict_proba tar rådata och kör själv validate + prepare_features (clean + add_features).
+    """
+    return model.predict_proba(get_model(), get_customers())
+
+
+@st.cache_data
+def get_risk_thresholds() -> tuple[float, float]:
+    """Tertilgränserna för låg/medel/hög risk. Räknas en gång per session, inte per klick."""
+    return risk.risk_thresholds(get_customer_probabilities())
+
+
+def find_customer(customer_id: str) -> pd.DataFrame | None:
+    """En kund som enrads-DataFrame ur customers eller new_customers.
+
+    Okänt id ger ett läsbart felmeddelande på sidan och None i stället för KeyError.
+    """
+    try:
+        return db.find_customer(customer_id, db.DEFAULT_DB_PATH)
+    except KeyError:
+        st.error(f"Ingen kund med id {customer_id!r}. Kontrollera id:t och försök igen.")
+        return None
+
+
+@st.cache_data
+def get_segment_comparison(customer_id: str) -> dict:
+    """Segmentjämförelse för en sparad kund. Cachad på kund-id: K-Means körs om per anrop."""
+    customer = db.find_customer(customer_id, db.DEFAULT_DB_PATH)[data.RAW_FEATURE_COLUMNS]
+    return risk.segment_comparison(customer, get_customers(), get_customer_probabilities())
 
 
 def load_or_stop(loader, what: str):
