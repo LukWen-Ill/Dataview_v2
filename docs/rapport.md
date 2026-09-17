@@ -107,10 +107,11 @@ churn-modellen svarar på "vilka enskilda kunder riskerar att lämna?".
 **Arkitektur.** `CSV → SQLite → Python/scikit-learn → joblib → Streamlit`. All logik ligger i
 `src/`; Streamlit-sidorna visar bara resultat.
 
-**Databas.** SQLite (`data/churn.db`) via Pythons `sqlite3`. Tre tabeller: `customers`
+**Databas.** SQLite (`data/churn.db`) via Pythons `sqlite3`. Fyra tabeller: `customers`
 (rådatan), `model_runs` (en rad per utvärderad modell per träning, params och metrics som
-JSON) och `predictions` (varje prediktion från appen med indata, sannolikhet, threshold och
-beslut). Byggs med `python -m src.db`.
+JSON), `predictions` (varje prediktion från appen med indata, sannolikhet, threshold och
+beslut) och `new_customers` (kunder sparade från Säljverktyget, se avsnitt 5). Byggs med
+`python -m src.db`.
 
 **Förbehandling** (`src/features.py`). `ColumnTransformer`: numeriska kolumner
 medianimputeras och standardiseras, kategoriska imputeras med vanligaste värde och
@@ -133,11 +134,11 @@ importance/koefficienter med korrekta namn efter one-hot.
 silhouette score, PCA till två komponenter (49 % förklarad varians) för visualisering,
 segmentprofiler.
 
-**Frontend.** Streamlit med fem sidor: Översikt, Data (EDA med Altair), Modeller
+**Frontend.** Streamlit med fem sidor för kärnan: Översikt, Data (EDA med Altair), Modeller
 (jämförelse, test, threshold-slider, feature importance), Segmentering, Prediktera (formulär
-och CSV-batch, loggning till databasen).
+och CSV-batch, loggning till databasen). Därtill sidan Säljverktyg, som är extra (avsnitt 5).
 
-**Kvalitet.** 124 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
+**Kvalitet.** 212 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
 felfallstester för saknad fil/kolumn/modell/databas, ogiltig target, okänd kategori,
 threshold utanför 0–1. Ruff för lint och formatering. GitHub Actions kör lint, tester på
 Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
@@ -161,3 +162,49 @@ Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
 - **Framtida arbete.** [T.ex. logistisk regression som slutmodell för bättre tolkbarhet;
   kalibrera sannolikheterna; koppla segment till churn-modellen i appen; deploy på
   Streamlit Community Cloud.]
+
+## 5. Extra – utanför kursens krav: Säljverktyg
+
+Sidan Säljverktyg och koden bakom den (`src/price.py`, `src/risk.py`, `src/labels.py`,
+`src/actions.py`) ingår inte i uppgiften. Den byggdes efter att kärnan ovan var klar och
+redovisas här separat.
+
+**Prismodell (regression).** Säljaren ska kunna ge en ny kund ett pris innan churnrisken
+bedöms, så vi tränade en regressionsmodell på `MonthlyCharges`. Features är kundens
+tjänster, avtal, betalsätt, demografi och kundtid – inte `TotalCharges`, som är en funktion
+av priset. Samma train/validation/test-rader som churnmodellen, `GridSearchCV` med 5-delad
+CV, modellval på validering med R²:
+
+| Modell | Bästa params | MAE | RMSE | R² |
+|---|---|---|---|---|
+| **Linjär regression** | `positive=True` | 0,78 | 1,03 | 0,9989 |
+| Random forest | 200 träd, max_depth 10 | 0,98 | 1,36 | 0,9980 |
+
+På testmängden: MAE 0,78 $, RMSE 1,01 $, R² 0,999. Ett R² så nära 1 är inte ett tecken på
+läcka utan på hur datan är byggd: priset är nästan exakt en summa av tjänsterna.
+`positive=True` tvingar alla koefficienter att vara ≥ 0, så varje tjänst kan bara höja priset.
+
+**Risknivåer i stället för procent.** `class_weight="balanced"` gör att churnmodellens
+sannolikheter är uppblåsta (den är inte kalibrerad). Därför visar Säljverktyget aldrig rå
+procent utan en nivå: tertiler av sannolikheterna över träningsdatan, med gränserna 0,188
+och 0,568. På testmängden churnar 3 % av kunderna i låg, 20 % i medel och 56 % i hög, så
+nivåerna bär information även om siffrorna bakom inte är sannolikheter i strikt mening.
+Gränserna är deterministiska givet modell och data – inga handsatta tal.
+
+**Åtgärdskatalog och what-if.** Katalogen bygger på EDA:n: månadsavtal churnar 43 % mot
+11 % (ettår) och 3 % (tvåår); fiberkunder på månadsavtal utan support eller säkerhet
+churnar 58 % mot 37–39 % med. För varje alternativ ändras kundens konfiguration, prismodellen
+sätter nytt pris och churnmodellen bedömer risken igen med det nya priset. Bara alternativ
+som modellen bedömer ge lägre sannolikhet än utgångsläget visas, högst tre. Ett alternativ
+ändrar aldrig kundtid och tar aldrig bort en tjänst.
+
+**Samband, inte orsak.** Datan är ett tvärsnitt. Att kunder med automatisk betalning churnar
+mindre (15–17 % mot 45 % för elektronisk check) kan lika gärna bero på vilka kunder som
+väljer automatisk betalning. Sådana alternativ märks "samband i datan, inte bevisad effekt",
+och all text på sidan är formulerad som modellens bedömning, aldrig som orsakspåståenden.
+
+**Gräns mellan träningsdata och nya kunder.** Kunder som sparas från sidan hamnar i tabellen
+`new_customers`, utan `Churn`-kolumn, och läses aldrig av träningen. Träningsdatan är alltid
+den versionerade CSV:n, modellerna är versionerade i `models/` och appen tränar aldrig om.
+Därmed ger samma CSV och samma `random_state` samma modell oavsett vad som lagts in via appen
+– ett reproducerbarhetsbeslut, inte en teknisk begränsning.

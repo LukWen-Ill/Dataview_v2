@@ -32,12 +32,18 @@ I scope:
 - Binär klassificering med tre modeller (logistisk regression, beslutsträd, random forest)
   i sklearn-`Pipeline`, små grids i `GridSearchCV` med 5-fold CV.
 - 60/20/20 stratifierad split. Testmängden används bara för slutlig utvärdering.
-- Streamlit med fem sidor: Översikt, Data (EDA), Modeller, Segmentering, Prediktera.
+- Streamlit med sex sidor: Översikt, Data (EDA), Modeller, Segmentering, Prediktera,
+  Säljverktyg (extra).
 - K-Means + PCA för kundsegmentering.
 - CI på GitHub Actions: lint, tester, end-to-end-träning.
+- Extra, beslutat 2026-09-17: regressionsmodell för månadspris (`src/price.py`), risknivåer
+  som tertiler och åtgärdskatalog för Säljverktyget. Risk visas relativt (låg/medel/hög),
+  aldrig som rå procent.
+- Extra: registret `new_customers` för kunder sparade från appen. Skilt från `customers`,
+  ingen `Churn`-kolumn, läses aldrig av träningen.
 
 Utanför scope (fråga först):
-- Deep learning, SVM eller fler modeller.
+- Deep learning, SVM eller fler modeller. Undantag: prismodellen ovan.
 - Användarinloggning, API-lager, Docker, annan databas än SQLite.
 - Ommärkning eller schemaändringar av datasettet.
 
@@ -47,6 +53,7 @@ Utanför scope (fråga först):
 data/raw/telco_churn.csv   rådata, versionshanterad
 data/churn.db              SQLite, byggs av python -m src.db, gitignorerad
 models/                    churn_model.joblib, results.json, test_predictions.csv – versionshanterade
+                           price_model.joblib, price_results.json – prismodellen (extra), versionshanterade
 src/data.py                inläsning, schemavalidering, rensning, feature engineering
 src/db.py                  SQLite-funktioner
 src/features.py            ColumnTransformer
@@ -55,7 +62,12 @@ src/train.py               hela träningsflödet (CLI: python -m src.train)
 src/evaluate.py            metrics, threshold, confusion matrix, ROC, feature importance
 src/segment.py             K-Means, PCA, segmentprofiler
 src/eda.py                 aggregeringar för EDA-sidan
+src/price.py               (extra) prismodell, regression på MonthlyCharges (CLI: python -m src.price)
+src/risk.py                (extra) risknivåer (tertiler), riskfaktorer, segmentjämförelse
+src/labels.py              (extra) kundvänliga namn på kolumner och värden
+src/actions.py             (extra) åtgärdskatalog med what-if genom pris- och churnmodell
 app.py, pages/, app_helpers.py   Streamlit – bara presentation
+pages/6_Saljverktyg.py     (extra) Säljverktyg: ny och befintlig kund
 tests/                     pytest
 docs/rapport.md            teknisk rapport
 ```
@@ -64,9 +76,9 @@ docs/rapport.md            teknisk rapport
 
 - **Code-first.** All ML-logik i `src/`. `app.py`, `pages/` och `app_helpers.py` visar bara
   resultat. Aggregeringar för grafer får ligga i `src/eda.py`.
-- **Alternativ A för modellen.** `python -m src.train` skapar `models/*` som checkas in.
-  Appen laddar den sparade modellen och kör aldrig GridSearchCV. Träna om och committa när
-  något i `src/` som påverkar modellen ändras.
+- **Alternativ A för modellen.** `python -m src.train` och `python -m src.price` skapar
+  `models/*` som checkas in. Appen laddar de sparade modellerna och kör aldrig GridSearchCV.
+  Träna om och committa när något i `src/` som påverkar en modell ändras.
 - **Basic branching.** Allt arbete på `feature/<kort-namn>`, in via PR, CI grön före merge.
   Ändra aldrig `main` direkt. Små, begripliga commits.
 - **Tester får inte passera tyst.** `filterwarnings = error`, `--strict-markers`,
@@ -84,6 +96,7 @@ pip install -r requirements-dev.txt
 
 python -m src.db             # bygg data/churn.db från CSV:n
 python -m src.train          # träna, jämför, spara models/* och logga i databasen
+python -m src.price          # (extra) träna prismodellen, spara models/price_* och logga
 streamlit run app.py         # starta appen (laddar sparad modell)
 pytest --cov=src             # tester med täckningskrav
 ruff check . && ruff format --check .
