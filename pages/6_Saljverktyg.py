@@ -1,12 +1,14 @@
 """Säljverktyg (extra): månadspris och churnrisk för en ny eller befintlig kund.
 
-Säljaren fyller i kunden i samtalets ordning: hushåll -> telefoni -> internet -> tillägg ->
-avtal och betalning. Prismodellen ger månadspriset, som går in i churnmodellen som
+Säljaren fyller i kunden i samtalets ordning, i tre kolumner: person -> produkter (telefoni,
+internet, tillägg) -> betalning. Prismodellen ger månadspriset, som går in i churnmodellen som
 MonthlyCharges. Risken visas relativt (låg/medel/hög mot modellens fördelning över
 träningsdatan), aldrig som rå procent. All logik ligger i src/ - sidan visar bara resultat.
 """
 
 from __future__ import annotations
+
+import math
 
 import pandas as pd
 import streamlit as st
@@ -15,6 +17,7 @@ from app_helpers import (
     find_customer,
     get_customers,
     get_model,
+    get_overview,
     get_price_model,
     get_risk_thresholds,
     get_segment_comparison,
@@ -22,9 +25,10 @@ from app_helpers import (
 )
 from src import db
 from src.actions import suggest_actions
-from src.data import ADDON_SERVICES, RAW_FEATURE_COLUMNS, clean
+from src.data import ADDON_SERVICES, ID_COLUMN, RAW_FEATURE_COLUMNS, clean
 from src.labels import LABELS, VALUE_LABELS
 from src.model import predict_proba
+from src.overview import search_customers
 from src.price import PRICE_FEATURE_COLUMNS, predict_price
 from src.risk import risk_factors, risk_level
 
@@ -52,6 +56,17 @@ DISCLAIMER = (
     "Bedömningarna bygger på en statistisk modell och visar samband i datan, "
     "inte vad som händer med just den här kunden."
 )
+PAGE_SIZE = 25
+# Arbetslistans kolumner -> kundvänliga rubriker.
+LIST_HEADERS = {
+    ID_COLUMN: "Kund-id",
+    "level": "Risknivå",
+    "MonthlyCharges": LABELS["MonthlyCharges"],
+    "tenure": LABELS["tenure"],
+    "Contract": LABELS["Contract"],
+    "InternetService": LABELS["InternetService"],
+    "PaymentMethod": LABELS["PaymentMethod"],
+}
 
 
 def choose(column: str, defaults: dict, key: str, container, options=None, labels=None):
@@ -73,60 +88,55 @@ def choose(column: str, defaults: dict, key: str, container, options=None, label
 
 
 def customer_form(defaults: dict, key: str) -> dict | None:
-    """Formuläret i samtalets ordning. Returnerar kundens konfiguration utan MonthlyCharges,
-    eller None om något fält inte är valt ännu.
+    """Formuläret i tre kolumner i samtalets ordning: Person | Produkter | Betalning.
+    Returnerar kundens konfiguration utan MonthlyCharges, eller None om något fält inte är valt.
 
     defaults förifyller fälten (befintlig kund). Flera linjer visas bara om kunden har
     telefoni och tilläggen bara om kunden har internet - annars sätts datasettets värden
-    "No phone service" respektive "No internet service".
+    "No phone service" respektive "No internet service". Dolda fält lämnar sin plats tom
+    så att kolumnerna behåller formen.
     """
     values: dict[str, object] = {}
+    person, products, payment = st.columns([2, 3, 2], gap="medium")
 
+    person.markdown("**Person**")
     if "tenure" in defaults:
-        values["tenure"] = st.number_input(
+        values["tenure"] = person.number_input(
             LABELS["tenure"], 0, 100, int(defaults["tenure"]), key=f"{key}_tenure"
         )
         values["TotalCharges"] = defaults["TotalCharges"]
     else:
         values["tenure"] = 0
         values["TotalCharges"] = 0.0
-
-    st.markdown("**1. Hushåll**")
-    cols = st.columns(4)
+    left, right = person.columns(2)
     values["SeniorCitizen"] = choose(
-        "SeniorCitizen", defaults, key, cols[0], options=[0, 1], labels=SENIOR_LABELS
+        "SeniorCitizen", defaults, key, left, options=[0, 1], labels=SENIOR_LABELS
     )
-    values["gender"] = choose("gender", defaults, key, cols[1])
-    values["Partner"] = choose("Partner", defaults, key, cols[2], options=YES_NO)
-    values["Dependents"] = choose("Dependents", defaults, key, cols[3], options=YES_NO)
+    values["gender"] = choose("gender", defaults, key, right)
+    values["Partner"] = choose("Partner", defaults, key, left, options=YES_NO)
+    values["Dependents"] = choose("Dependents", defaults, key, right, options=YES_NO)
 
-    st.markdown("**2. Telefoni**")
-    cols = st.columns(4)
-    values["PhoneService"] = choose("PhoneService", defaults, key, cols[0], options=YES_NO)
+    products.markdown("**Produkter**")
+    left, right = products.columns(2)
+    values["PhoneService"] = choose("PhoneService", defaults, key, left, options=YES_NO)
     if values["PhoneService"] == "Yes":
-        values["MultipleLines"] = choose("MultipleLines", defaults, key, cols[1], options=YES_NO)
+        values["MultipleLines"] = choose("MultipleLines", defaults, key, right, options=YES_NO)
     else:
         values["MultipleLines"] = "No phone service"
-
-    st.markdown("**3. Internet**")
-    cols = st.columns(4)
-    values["InternetService"] = choose("InternetService", defaults, key, cols[0])
-
-    st.markdown("**4. Tillägg**")
+    values["InternetService"] = choose("InternetService", defaults, key, left)
+    left, right = products.columns(2)
     if values["InternetService"] in ("DSL", "Fiber optic"):
-        cols = st.columns(3)
         for i, service in enumerate(ADDON_SERVICES):
-            values[service] = choose(service, defaults, key, cols[i % 3], options=YES_NO)
+            values[service] = choose(service, defaults, key, (left, right)[i % 2], options=YES_NO)
     else:
-        st.caption("Tillägg kräver internet.")
+        left.caption("Tillägg kräver internet.")
         for service in ADDON_SERVICES:
             values[service] = "No internet service"
 
-    st.markdown("**5. Avtal och betalning**")
-    cols = st.columns(3)
-    values["Contract"] = choose("Contract", defaults, key, cols[0])
-    values["PaperlessBilling"] = choose("PaperlessBilling", defaults, key, cols[1], options=YES_NO)
-    values["PaymentMethod"] = choose("PaymentMethod", defaults, key, cols[2])
+    payment.markdown("**Betalning**")
+    values["Contract"] = choose("Contract", defaults, key, payment)
+    values["PaperlessBilling"] = choose("PaperlessBilling", defaults, key, payment, options=YES_NO)
+    values["PaymentMethod"] = choose("PaymentMethod", defaults, key, payment)
 
     if any(value is None for value in values.values()):
         return None
@@ -210,6 +220,41 @@ def show_result(customer: pd.DataFrame, monthly_charges: float, probability: flo
     st.caption(DISCLAIMER)
 
 
+def overview_table(rows: pd.DataFrame) -> pd.DataFrame:
+    """Arbetslistan med kundvänliga namn. Priset förblir ett tal så att kolumnen sorterar rätt."""
+    table = rows.copy()
+    table["level"] = table["level"].str.capitalize()
+    for column in ["Contract", "InternetService", "PaymentMethod"]:
+        table[column] = table[column].map(VALUE_LABELS[column])
+    return table.rename(columns=LIST_HEADERS)
+
+
+def pick_from_list(hits: pd.DataFrame, query: str) -> str | None:
+    """Visar träffarna 25 per sida och returnerar kund-id för vald rad, annars None.
+
+    Nyckeln innehåller sökning och sida så att valet nollställs när listan byter innehåll.
+    """
+    n_pages = math.ceil(len(hits) / PAGE_SIZE)
+    page = st.number_input("Sida", 1, n_pages, 1, key=f"sida_{query}") if n_pages > 1 else 1
+    start = (page - 1) * PAGE_SIZE
+    shown = hits.iloc[start : start + PAGE_SIZE]
+    st.caption(
+        f"Rad {start + 1}–{start + len(shown)} av {len(hits)}. Klicka på en rad för att ladda "
+        "kunden, på en kolumnrubrik för att sortera."
+    )
+    event = st.dataframe(
+        overview_table(shown),
+        hide_index=True,
+        width="stretch",
+        on_select="rerun",
+        selection_mode="single-row",
+        key=f"lista_{query}_{page}",
+        column_config={LABELS["MonthlyCharges"]: st.column_config.NumberColumn(format="%.2f $")},
+    )
+    rows = event.selection.rows
+    return str(shown[ID_COLUMN].iloc[rows[0]]) if rows else None
+
+
 new_tab, existing_tab = st.tabs(["Ny kund", "Befintlig kund"])
 
 with new_tab:
@@ -231,7 +276,21 @@ with new_tab:
             st.success(f"Kunden sparades med id {customer_id}. Sök på id:t under Befintlig kund.")
 
 with existing_tab:
-    customer_id = st.text_input("Kund-id", placeholder="t.ex. 7590-VHVEG eller NEW-000001").strip()
+    overview = load_or_stop(get_overview, "arbetslistan")
+    query = st.text_input(
+        "Sök kund-id",
+        placeholder="t.ex. 7590, 7590-VHVEG eller NEW",
+        help="Siffror matchar början av kund-id, annan text var som helst i id:t.",
+    ).strip()
+    hits = search_customers(overview, query)
+    customer_id = None
+    if hits.empty:
+        st.error(f"Ingen kund matchar {query!r}. Kontrollera id:t och försök igen.")
+    else:
+        customer_id = pick_from_list(hits, query)
+        if customer_id is None and query and len(hits) == 1:
+            customer_id = str(hits[ID_COLUMN].iloc[0])  # exakt en träff laddas direkt
+
     row = find_customer(customer_id) if customer_id else None
     if row is not None:
         stored = stored_values(row)

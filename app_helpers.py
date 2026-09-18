@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from src import data, db, model, price, risk, train
+from src.overview import customer_overview
 from src.segment import fit_segments, kmeans_scores, preprocess_for_clustering
 
 TRAIN_HINT = "Träna modellen först: `python -m src.train`"
@@ -94,6 +95,24 @@ def get_segment_comparison(customer_id: str) -> dict:
     """Segmentjämförelse för en sparad kund. Cachad på kund-id: K-Means körs om per anrop."""
     customer = db.find_customer(customer_id, db.DEFAULT_DB_PATH)[data.RAW_FEATURE_COLUMNS]
     return risk.segment_comparison(customer, get_customers(), get_customer_probabilities())
+
+
+def get_overview() -> pd.DataFrame:
+    """Arbetslistan: alla kunder ur customers och new_customers med risknivå.
+
+    Sannolikheterna för träningsdatan är redan cachade; bara nya kunder predikteras här.
+    Nya kunder kan tillkomma under sessionen, så listan själv cachas inte.
+    """
+    columns = [data.ID_COLUMN, *data.RAW_FEATURE_COLUMNS]
+    customers = get_customers()[columns]
+    probabilities = get_customer_probabilities()
+    new = db.load_new_customers(db.DEFAULT_DB_PATH)
+    if not new.empty:
+        customers = pd.concat([customers, new[columns]], ignore_index=True)
+        probabilities = pd.concat(
+            [probabilities, model.predict_proba(get_model(), new)], ignore_index=True
+        )
+    return customer_overview(customers, probabilities, get_risk_thresholds())
 
 
 def load_or_stop(loader, what: str):
