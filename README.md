@@ -74,10 +74,11 @@ src/price.py               (extra) regressionsmodell för månadspris (CLI: pyth
 src/risk.py                (extra) risknivåer (tertiler), riskfaktorer, segmentjämförelse
 src/labels.py              (extra) kundvänliga namn på kolumner och värden
 src/actions.py             (extra) åtgärdskatalog med what-if genom pris- och churnmodell
+src/overview.py            (extra) kundlista med risknivå och sökning på kund-id
 app.py                     Streamlit: startsida (översikt)
 pages/                     Streamlit: Data, Modeller, Segmentering, Prediktera, Säljverktyg (extra)
 app_helpers.py             cachade laddningsfunktioner för sidorna
-tests/                     pytest (212 tester)
+tests/                     pytest (227 tester)
 docs/rapport.md            teknisk rapport
 .github/workflows/ci.yml   CI
 ```
@@ -176,9 +177,11 @@ Sidan ligger utanför kursens krav och är byggd för en säljare med kunden i t
   månadspriset, som går in i churnmodellen som `MonthlyCharges`. Sidan visar pris, risknivå,
   de största riskfaktorerna och upp till tre alternativ ur åtgärdskatalogen (`src/actions.py`)
   med pris och bedömd risknivå sida vid sida. "Spara kund" lägger kunden i `new_customers`.
-- **Befintlig kund.** Sök på kund-id i träningsdatan eller registret. Fälten förifylls och
-  sidan visar dagens pris, risknivå, jämförelse med liknande kunder (K-Means) och alternativ.
-  Fälten kan justeras för what-if – pris och risknivå räknas om.
+- **Befintlig kund.** Arbetslista över alla kunder (träningsdatan och registret) med risknivå,
+  pris, kundtid, avtal, internet och betalsätt, hög risk överst, 25 per sida. Sök på kund-id:
+  rena siffror matchar början av id:t, fullt id laddar kunden direkt. Välj en rad så förifylls
+  fälten och sidan visar dagens pris, risknivå, jämförelse med liknande kunder (K-Means) och
+  alternativ. Fälten kan justeras för what-if – pris och risknivå räknas om.
 
 Risknivån är relativ: tertiler av churnmodellens sannolikheter över träningsdatan (gränser
 0,188 och 0,568). Rå procent visas inte, eftersom `class_weight="balanced"` gör
@@ -190,7 +193,7 @@ Nya kunder läses aldrig av träningen: `python -m src.train` ger samma split oc
 ## Tester och lint
 
 ```bash
-pytest --cov=src                        # 212 tester, täckningskrav 90 %
+pytest --cov=src                        # 227 tester, täckningskrav 90 %
 ruff check . && ruff format --check .
 ```
 

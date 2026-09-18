@@ -138,7 +138,7 @@ segmentprofiler.
 (jämförelse, test, threshold-slider, feature importance), Segmentering, Prediktera (formulär
 och CSV-batch, loggning till databasen). Därtill sidan Säljverktyg, som är extra (avsnitt 5).
 
-**Kvalitet.** 212 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
+**Kvalitet.** 227 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
 felfallstester för saknad fil/kolumn/modell/databas, ogiltig target, okänd kategori,
 threshold utanför 0–1. Ruff för lint och formatering. GitHub Actions kör lint, tester på
 Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
@@ -166,7 +166,7 @@ Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
 ## 5. Extra – utanför kursens krav: Säljverktyg
 
 Sidan Säljverktyg och koden bakom den (`src/price.py`, `src/risk.py`, `src/labels.py`,
-`src/actions.py`) ingår inte i uppgiften. Den byggdes efter att kärnan ovan var klar och
+`src/actions.py`, `src/overview.py`) ingår inte i uppgiften. Den byggdes efter att kärnan ovan var klar och
 redovisas här separat.
 
 **Prismodell (regression).** Säljaren ska kunna ge en ny kund ett pris innan churnrisken

@@ -66,6 +66,7 @@ src/price.py               (extra) prismodell, regression på MonthlyCharges (CL
 src/risk.py                (extra) risknivåer (tertiler), riskfaktorer, segmentjämförelse
 src/labels.py              (extra) kundvänliga namn på kolumner och värden
 src/actions.py             (extra) åtgärdskatalog med what-if genom pris- och churnmodell
+src/overview.py            (extra) kundlista med risknivå, sökning på kund-id
 app.py, pages/, app_helpers.py   Streamlit – bara presentation
 pages/6_Saljverktyg.py     (extra) Säljverktyg: ny och befintlig kund
 tests/                     pytest
