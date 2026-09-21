@@ -1,7 +1,4 @@
-"""Streamlit-appens startsida: översikt. Kör: streamlit run app.py
-
-Övriga sidor ligger i pages/. All ML-logik ligger i src/ - sidorna visar bara resultat.
-"""
+"""Översikt: modellresultat och hur flödet hänger ihop. Bara presentation."""
 
 from __future__ import annotations
 
@@ -11,7 +8,7 @@ import streamlit as st
 from app_helpers import get_customers, get_results, load_or_stop, metrics_row
 from src.data import TARGET_COLUMN
 
-st.set_page_config(page_title="Churn-prediktion", page_icon="📉", layout="wide")
+st.set_page_config(page_title="Översikt", page_icon="📉", layout="wide")
 
 customers = load_or_stop(get_customers, "kunddatan")
 results = load_or_stop(get_results, "träningsresultatet")
@@ -61,7 +58,7 @@ st.markdown(
 6. **Prediktion** – appen laddar `models/churn_model.joblib`, du väljer threshold och varje
    prediktion loggas i databasen.
 
-Använd menyn till vänster: **Data** (EDA), **Modeller** (utvärdering, threshold, feature
-importance), **Segmentering** (K-Means + PCA) och **Prediktera**.
+Använd menyn till vänster: **Dashboard** (intäktsprognos, extra), **Data** (EDA), **Modeller**
+(utvärdering, threshold, feature importance), **Segmentering** (K-Means + PCA) och **Prediktera**.
 """
 )

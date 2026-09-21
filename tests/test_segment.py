@@ -8,6 +8,7 @@ from matplotlib.figure import Figure
 
 from src.data import TARGET_COLUMN
 from src.segment import (
+    SIMPLE_FEATURES,
     fit_segments,
     kmeans_scores,
     plot_elbow_and_silhouette,
@@ -77,3 +78,9 @@ def test_plots_return_figures(prepared):
     labels, coords, explained = fit_segments(prepared, k=2)
     assert isinstance(plot_elbow_and_silhouette(scores), Figure)
     assert isinstance(plot_segments(coords, labels, explained), Figure)
+
+
+def test_preprocess_with_columns_returns_only_those(raw_df):
+    X = preprocess_for_clustering(raw_df, SIMPLE_FEATURES)
+    assert X.shape == (len(raw_df), len(SIMPLE_FEATURES))
+    assert X.mean(axis=0) == pytest.approx(0, abs=1e-6)

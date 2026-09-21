@@ -102,6 +102,19 @@ Segment 1 – nya kunder med månadsavtal, hög kostnad och få tjänster – ä
 mest. Segmenteringen är icke-vägledd och svarar på "vilka kundtyper har vi?", medan
 churn-modellen svarar på "vilka enskilda kunder riskerar att lämna?".
 
+### 2.6 Dashboard (extra, utanför kursens krav)
+
+Startsidan Dashboard blickar framåt: varje aktiv kund (Churn = No) rullas fram upp till 12 månader
+(valbar horisont) med sannolikheten (1 − p)^m att vara kvar, där p är modellens churn-sannolikhet, och summerar
+kvarvarande månadsintäkt och förväntad förlust. Blå linje är dagens aktiva kunders
+kvarvarande intäkt plus en mockad nykundsförsäljning; röd linje är dagens kunders
+kvarvarande intäkt utan nykunder, så gapet mellan linjerna är nykundernas bidrag. Nykundsmocken
+är (ca 600 nya kunder månad 1, +5 % per månad med ±20 % seedad
+slump, 50 $ per kund, samma churn-risk som de befintliga). Hela prognosen antar konstant
+churn-risk per kund och månad samt frysta priser.
+Den bygger på den befintliga modellen utan omträning; beräkningarna ligger i
+`src/dashboard.py`.
+
 ## 3. Teknisk specifikation
 
 **Arkitektur.** `CSV → SQLite → Python/scikit-learn → joblib → Streamlit`. All logik ligger i
@@ -133,11 +146,12 @@ importance/koefficienter med korrekta namn efter one-hot.
 silhouette score, PCA till två komponenter (49 % förklarad varians) för visualisering,
 segmentprofiler.
 
-**Frontend.** Streamlit med fem sidor: Översikt, Data (EDA med Altair), Modeller
+**Frontend.** Streamlit med sex sidor: Dashboard (extra: intäktsprognos, startsida), Översikt, Data (EDA
+med Altair), Modeller
 (jämförelse, test, threshold-slider, feature importance), Segmentering, Prediktera (formulär
 och CSV-batch, loggning till databasen).
 
-**Kvalitet.** 124 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
+**Kvalitet.** 162 pytest-tester med 99 % täckning (krav 90 %), `filterwarnings = error`,
 felfallstester för saknad fil/kolumn/modell/databas, ogiltig target, okänd kategori,
 threshold utanför 0–1. Ruff för lint och formatering. GitHub Actions kör lint, tester på
 Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
