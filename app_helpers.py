@@ -55,6 +55,12 @@ def get_segments(k: int, simple: bool = False):
     return fit_segments(preprocess_for_clustering(get_customers(), columns), k)
 
 
+@st.cache_resource
+def get_pricing_model():
+    X, y = prepare_pricing_data(get_customers())
+    return train_pricing_model(X, y)
+
+
 def load_or_stop(loader, what: str):
     """Kör en laddningsfunktion; visa ett läsbart fel och stoppa sidan om den misslyckas."""
     try:
