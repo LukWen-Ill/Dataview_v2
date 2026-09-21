@@ -8,6 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from src import data, db, model, train
+from src.pricing import prepare_pricing_data, train_pricing_model
 from src.segment import SIMPLE_FEATURES, fit_segments, kmeans_scores, preprocess_for_clustering
 
 TRAIN_HINT = "Träna modellen först: `python -m src.train`"
