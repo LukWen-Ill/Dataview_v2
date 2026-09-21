@@ -6,7 +6,7 @@ import pandas as pd
 import streamlit as st
 
 from app_helpers import get_customers, get_pricing_model, load_or_stop
-from src.pricing import PRICE_FEATURES, price_list, prepare_pricing_data
+from src.pricing import PRICE_FEATURES, prepare_pricing_data, price_list
 
 st.set_page_config(page_title="Prissättning", page_icon="💰", layout="wide")
 st.title("💰 Prissättning")

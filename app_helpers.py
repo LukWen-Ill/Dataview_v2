@@ -8,9 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from src import data, db, model, train
-from src.segment import fit_segments, kmeans_scores, preprocess_for_clustering, SIMPLE_FEATURES
 from src.pricing import prepare_pricing_data, train_pricing_model
-
+from src.segment import SIMPLE_FEATURES, fit_segments, kmeans_scores, preprocess_for_clustering
 
 TRAIN_HINT = "Träna modellen först: `python -m src.train`"
 
@@ -55,6 +54,7 @@ def get_kmeans_scores(simple: bool = False) -> pd.DataFrame:
 def get_segments(k: int, simple: bool = False):
     columns = SIMPLE_FEATURES if simple else None
     return fit_segments(preprocess_for_clustering(get_customers(), columns), k)
+
 
 @st.cache_resource
 def get_pricing_model():
