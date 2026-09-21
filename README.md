@@ -10,12 +10,14 @@ Projektarbete Del 2 i kursen *AI – teori och tillämpning, del 1* (NBI/Handels
 
 ## Vad projektet gör
 
-"Churn" betyder att en kund lämnar. Appen svarar på två frågor:
+"Churn" betyder att en kund lämnar. Appen svarar på två frågor (plus en extra):
 
 - **Vilka kunder riskerar att lämna?** – en klassificeringsmodell ger en sannolikhet per kund.
   Användaren väljer threshold och ser hur avvägningen mellan precision och recall ändras.
 - **Vilka typer av kunder har vi?** – K-Means grupperar kunderna i segment som sedan
   tolkas med churn-andel per segment.
+- **Hur mycket intäkt förväntas gå förlorad?** (extra – inte ett kurskrav) – Dashboard-sidan
+  rullar fram dagens aktiva kunder upp till 12 månader med modellens sannolikheter.
 
 Hela flödet:
 
@@ -68,10 +70,11 @@ src/train.py               hela träningsflödet – börja läsa här
 src/evaluate.py            metrics, threshold-tabell, confusion matrix, ROC, feature importance
 src/segment.py             K-Means, elbow/silhouette, PCA, segmentprofiler
 src/eda.py                 aggregeringar för EDA-sidan
-app.py                     Streamlit: startsida (översikt)
-pages/                     Streamlit: Data, Modeller, Segmentering, Prediktera
+src/dashboard.py           filtrering, intäktsprognos och nyckeltal för Dashboard-sidan (extra)
+Dashboard.py               Streamlit: startsida, intäktsprognos (extra)
+pages/                     Streamlit: Översikt, Data, Modeller, Segmentering, Prediktera
 app_helpers.py             cachade laddningsfunktioner för sidorna
-tests/                     pytest (124 tester)
+tests/                     pytest (162 tester)
 docs/rapport.md            teknisk rapport
 .github/workflows/ci.yml   CI
 ```
@@ -131,7 +134,7 @@ Träna om när koden i `src/` ändras.
 ## Streamlit
 
 ```bash
-streamlit run app.py
+streamlit run Dashboard.py
 ```
 
 Appen laddar den sparade modellen – den tränar aldrig själv. Saknas modellen visas ett
@@ -139,16 +142,32 @@ felmeddelande med träningskommandot.
 
 | Sida | Innehåll |
 |---|---|
+| Dashboard (extra, startsida) | Intäktsprognos 3, 6 eller 12 månader framåt: KPI-rad, blå linje för intäkt inkl. mockade nykunder, röd för dagens kunders intäkt utan nykunder, lodrät hover per månad, filter på avtal, internet, betalsätt och K-Means-segment, ett kort per grupp med churn-risk |
 | Översikt | Antal kunder, churn-andel, vald modell, testresultat, modelljämförelse |
 | Data | EDA: churn per kategori, kundtid, månadskostnad, korrelationer |
 | Modeller | Jämförelse på validation, slutresultat på test, threshold-slider med confusion matrix, ROC-kurva, classification report, feature importance |
 | Segmentering | Elbow och silhouette, K-Means-kluster i PCA-rummet, segmentprofiler med churn-andel |
 | Prediktera | En kund via formulär (loggas i databasen) eller många via CSV, med valbar threshold |
 
+### Dashboard (extra – inte ett kurskrav)
+
+`Churn = Yes` i datasettet betyder "lämnade senaste månaden", så modellens sannolikhet p
+tolkas som risk per månad. Varje aktiv kund (`Churn = No`) rullas fram med (1 − p)^m för
+m = 0–12 månader (horisont 3, 6 eller 12 väljs på sidan). Kvarvarande MRR är
+Σ MonthlyCharges × (1 − p)^m och förlusten en månad är skillnaden mot månaden före. Beräkningarna ligger i `src/dashboard.py`; sidan
+`Dashboard.py` visar bara resultatet och tränar ingenting om.
+Blå linje är dagens aktiva kunders kvarvarande intäkt plus en **mockad nykundsförsäljning**;
+röd linje är dagens kunders kvarvarande intäkt utan nykunder, så gapet mellan linjerna
+är nykundernas bidrag. Förlusten per månad visas i tooltipen. Nykundsmocken (`NEW_CUSTOMER_MOCK` i
+`src/dashboard.py`): ca 600 nya kunder månad 1 (datasetets senaste kohort), +5 % per månad
+med ±20 % seedad slump, 50 $ per kund och samma churn-risk som de befintliga. Hela prognosen
+antar konstant churn-risk per kund och månad samt frysta priser.
+Sannolikheterna är inte kalibrerade (`class_weight="balanced"`), så kurvan är brant.
+
 ## Tester och lint
 
 ```bash
-pytest --cov=src                        # 124 tester, täckningskrav 90 %
+pytest --cov=src                        # 162 tester, täckningskrav 90 %
 ruff check . && ruff format --check .
 ```
 
