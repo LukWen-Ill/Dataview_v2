@@ -34,7 +34,6 @@ def preprocess_for_clustering(df: pd.DataFrame, columns=None) -> np.ndarray:
     if columns is None:
         return build_preprocessor().fit_transform(X)
     return StandardScaler().fit_transform(X[columns])
-        
 
 
 def kmeans_scores(
