@@ -26,7 +26,7 @@ K-Means och projiceras med **PCA** till två dimensioner - bara för att kunna r
 
 st.subheader("Hur många kluster?")
 simple = st.toggle(
-    "Klustra bara på tenure(antal månader kunden varit kund), månadskostnad och tilläggstjänster"
+    "Klustra bara på tenure (antal månader kunden varit kund), månadskostnad och tilläggstjänster"
 )
 with st.spinner("Beräknar inertia och silhouette för k = 2–8 …"):
     scores = load_or_stop(lambda: get_kmeans_scores(simple), "klusterpoängen")
