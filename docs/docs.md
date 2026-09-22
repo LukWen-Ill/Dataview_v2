@@ -6,6 +6,9 @@ Huvudresultat
 Datan delades in i train, test, val. Vi jämförde 3 modeller och tränade dem med hyperparametrar, gridsearch och kors validering för att få fram den bästa modellen. 
 Vi använde ROC-AUC som mått och RandomForest var våran vinnare, skillnaden mot logistik regression med 0,0006 så väldigt lite, och kanske LR hade varit bättre för den är mycket snabbare att träna, tolka och underhålla.
 Den valda modellen tränas om train, val och utvärderas på test datan och resultaten visar att den inte är överpassad mot train / val.
+Accuracy	Precision	  Recall	  F1	      ROC-AUC
+0,759	    0,532	      0,783	    0,634	    0,841
+
 Modellen hittar 78% av kunder som faktiskt lämnar, class_weight="balanced" prioriterar recall för att missa en churnare kostar mer än att kontakta någon en extra gång.
 
 Accuracy för modellen ligger på 0,759 vilket är strax över våran baseline som är 73.5% så en modell som bara gissar "stannar" hade haft 73.5% rätt.
@@ -40,7 +43,7 @@ För modellering så har vi pandas för datahantering och scikit-learn för rest
 Eftersom våran förbehandling ligger i pipelinen förhindrar det data leakage för att den anpassas på nytt för varje korsvalidering.
 
 Frontend är byggd i streamlit, sex sidor, med grafer och med rutor som gör att du kan prediktera själv. Appen laddar den sparade modellen och tränar aldrig själv. 
-All ML logiken ligger i src/ sidorna. Sidorna i appen visas bara resultat.
+All ML logiken ligger i src/. Sidorna i appen visas bara resultat.
 
 Tester så har vi över 125 tester med alla som går igenom. Vi har RUFF för lint och formatering. GitHub actions kör lint tester och en fullständig träning på varje pull request och det kan inte mergas förrän allting är grönt.
 
