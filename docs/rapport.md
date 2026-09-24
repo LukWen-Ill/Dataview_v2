@@ -1,15 +1,15 @@
 # Churn-prediktion på Telco Customer Churn – teknisk rapport
 
 **Kurs:** AI – teori och tillämpning, del 1 · **Uppgift:** Projektarbete Del 2
-**Grupp:** [FYLL I: namn, namn, namn]
-**Repo:** https://github.com/LukWen-Ill/Dataview_v2 · **App:** [FYLL I: länk till Streamlit Cloud om deployad]
+**Grupp:** Jonathan, Lukas och Havash
+**Repo:** https://github.com/LukWen-Ill/Dataview_v2
 
 ---
 
 ## 1. Bakgrund
 
 Ett telekombolag förlorar pengar varje gång en kund säger upp sitt abonnemang ("churn").
-Det är dyrare att vinna en ny kund än att behålla en befintlig, så bolaget vill veta *vilka*
+Det är dyrare att vinna en ny kund än att behålla en befintlig, så bolaget vill veta _vilka_
 kunder som riskerar att lämna för att kunna agera i tid – till exempel med ett erbjudande om
 längre avtal.
 
@@ -32,11 +32,11 @@ Datan delades stratifierat i 60 % träning (4 225 kunder), 20 % validering (1 40
 20 % test (1 409). För varje modell användes `GridSearchCV` med 5-delad korsvalidering på
 träningsmängden (scoring ROC-AUC). De tre bästa pipelinerna jämfördes på valideringsmängden:
 
-| Modell | Bästa hyperparametrar | CV ROC-AUC | Precision | Recall | F1 | ROC-AUC |
-|---|---|---|---|---|---|---|
-| Logistisk regression | C = 10 | 0,849 | 0,517 | 0,786 | 0,624 | 0,838 |
-| Beslutsträd | max_depth 5, min_samples_split 50 | 0,819 | 0,506 | 0,786 | 0,616 | 0,817 |
-| **Random forest** | 200 träd, max_depth 10, max_features sqrt, min_samples_split 20 | 0,847 | 0,524 | 0,775 | 0,626 | **0,838** |
+| Modell               | Bästa hyperparametrar                                           | CV ROC-AUC | Precision | Recall | F1    | ROC-AUC   |
+| -------------------- | --------------------------------------------------------------- | ---------- | --------- | ------ | ----- | --------- |
+| Logistisk regression | C = 10                                                          | 0,849      | 0,517     | 0,786  | 0,624 | 0,838     |
+| Beslutsträd          | max_depth 5, min_samples_split 50                               | 0,819      | 0,506     | 0,786  | 0,616 | 0,817     |
+| **Random forest**    | 200 träd, max_depth 10, max_features sqrt, min_samples_split 20 | 0,847      | 0,524     | 0,775  | 0,626 | **0,838** |
 
 Random forest valdes på grund av marginellt högst ROC-AUC på validering. Skillnaden mot
 logistisk regression är dock försumbar (0,8381 mot 0,8376), och den logistiska modellen är
@@ -48,9 +48,9 @@ enklare att tolka. Beslutsträdet är tydligt sämre – det är den enklaste mo
 Den valda modellen tränades om på träning + validering och utvärderades **en enda gång** på
 testmängden, som inte använts tidigare:
 
-| Accuracy | Precision | Recall | F1 | ROC-AUC |
-|---|---|---|---|---|
-| 0,759 | 0,532 | 0,783 | 0,634 | 0,841 |
+| Accuracy | Precision | Recall | F1    | ROC-AUC |
+| -------- | --------- | ------ | ----- | ------- |
+| 0,759    | 0,532     | 0,783  | 0,634 | 0,841   |
 
 Testresultatet ligger nära valideringsresultatet, vilket tyder på att modellen generaliserar
 och att vi inte överanpassat den mot valideringsmängden. Confusion matrix vid threshold 0,5:
@@ -63,12 +63,12 @@ Modellen ger en sannolikhet, och gränsen för när vi kallar en kund "churnare"
 affärsbeslut. Vi lät användaren välja threshold i appen och visar effekten på testmängden:
 
 | Threshold | Precision | Recall | Flaggade kunder | Missade churnare |
-|---|---|---|---|---|
-| 0,30 | 0,43 | 0,91 | 781 | 35 |
-| 0,40 | 0,48 | 0,85 | 655 | 57 |
-| 0,50 | 0,53 | 0,78 | 551 | 81 |
-| 0,60 | 0,57 | 0,66 | 432 | 127 |
-| 0,70 | 0,65 | 0,53 | 305 | 177 |
+| --------- | --------- | ------ | --------------- | ---------------- |
+| 0,30      | 0,43      | 0,91   | 781             | 35               |
+| 0,40      | 0,48      | 0,85   | 655             | 57               |
+| 0,50      | 0,53      | 0,78   | 551             | 81               |
+| 0,60      | 0,57      | 0,66   | 432             | 127              |
+| 0,70      | 0,65      | 0,53   | 305             | 177              |
 
 Lägre threshold fångar fler churnare men ger fler falska positiva. Om en åtgärd är billig
 (ett mejl) kan 0,3 vara rimligt; om den är dyr (en personlig rabatt) bör threshold höjas.
@@ -91,12 +91,12 @@ k = 2 (0,25) och elbow-kurvan planade ut runt k = 3–4. Vi valde k = 4 för att
 som är användbara för verksamheten – ett omdömesbeslut, som boken beskriver. Segmenten
 (sorterade på churn-andel) blev:
 
-| Segment | Kunder | Snitt kundtid | Snitt kostnad/mån | Tilläggstjänster | Vanligaste avtal | Churn |
-|---|---|---|---|---|---|---|
-| 1 | 1 903 | 16 mån | 84 $ | 1,6 | Month-to-month | **56 %** |
-| 2 | 1 620 | 21 mån | 50 $ | 1,8 | Month-to-month | 26 % |
-| 3 | 1 994 | 59 mån | 91 $ | 4,2 | Two year | 14 % |
-| 0 | 1 526 | 31 mån | 21 $ | 0,0 | Two year | 7 % |
+| Segment | Kunder | Snitt kundtid | Snitt kostnad/mån | Tilläggstjänster | Vanligaste avtal | Churn    |
+| ------- | ------ | ------------- | ----------------- | ---------------- | ---------------- | -------- |
+| 1       | 1 903  | 16 mån        | 84 $              | 1,6              | Month-to-month   | **56 %** |
+| 2       | 1 620  | 21 mån        | 50 $              | 1,8              | Month-to-month   | 26 %     |
+| 3       | 1 994  | 59 mån        | 91 $              | 4,2              | Two year         | 14 %     |
+| 0       | 1 526  | 31 mån        | 21 $              | 0,0              | Two year         | 7 %      |
 
 Segment 1 – nya kunder med månadsavtal, hög kostnad och få tjänster – är där åtgärder ger
 mest. Segmenteringen är icke-vägledd och svarar på "vilka kundtyper har vi?", medan
@@ -160,18 +160,98 @@ Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
 
 ## 4. Utvärdering av gruppens arbete
 
-[FYLL I – skriv detta själva, cirka en halv sida. Förslag på punkter:]
+### 4.1 Vad har varit bra
 
-- **Vad har varit bra?** [T.ex. att vi hade ett fungerande flöde tidigt och kunde bygga ut
-  det steg för steg; att testerna fångade fel innan de nådde appen.]
-- **Vad har vi lärt oss?** [T.ex. varför testmängden måste hållas undan tills sist; att
-  accuracy är missvisande vid obalans; att threshold är ett affärsbeslut och inte en
-  modellparameter; att förbehandlingen måste ligga i pipelinen för att korsvalideringen ska
-  bli rätt.]
-- **Hur har Git och GitHub fungerat?** [T.ex. feature-branches, pull requests, CI som måste
-  vara grön, konflikter vi stötte på och hur vi löste dem.]
-- **Vad hade vi gjort annorlunda?** [T.ex. bestämt databas från start i stället för att lägga
-  till den senare; testat på en ren dator tidigare.]
-- **Framtida arbete.** [T.ex. logistisk regression som slutmodell för bättre tolkbarhet;
-  kalibrera sannolikheterna; koppla segment till churn-modellen i appen; deploy på
-  Streamlit Community Cloud.]
+Den största styrkan i gruppen har varit kunskapsnivån. Alla tre hade läst kapitel 1-6 och gjort
+övningsuppgifterna innan projektet startade, och det märktes direkt i diskussionerna. Vi behövde
+inte lägga tid på att förklara grundbegrepp för varandra utan kunde gå rakt på frågor som spelar
+roll: vilken utvärderingsmetrik som är rimlig vid obalanserade klasser, varför förbehandlingen
+måste ligga i pipelinen, och vad som skiljer en signal i datan från ett läckage. När vi väl hade
+datasettet på plats tog det mindre än en dag att enas om tre kandidatmodeller, logistisk
+regression, beslutsträd och random forest, och motivera varje val utifrån problemet snarare än
+utifrån vad som råkade finnas i scikit-learn.
+
+En annan styrka var att vi delade upp ansvaret efter lager i stället för efter person. Data och
+databas, modellering och utvärdering samt frontend hölls isär, och gränssnitten emellan var
+tydliga. All ML-logik ligger i src/ och appen sköter bara presentationen. Det gjorde att vi kunde arbeta parallellt utan att
+trampa på varandra i koden, och att en person kunde sätta sig in i en annans del utan att behöva
+förstå allt. Hur mycket var och en hann bidra varierade över projektet, men uppdelningen gjorde
+att ingen del blev beroende av att en viss person var tillgänglig.
+
+EDA:n gav också mer än vi väntat oss. Den bekräftade inte bara det uppenbara, att månadskunder
+churnar mer, utan gav ett fynd vi inte hade förutsett: churn följer inte priset utan
+tjänstepaketet. Kunder med få tjänster som binder dem churnar mest, oavsett om paketet är billigt
+eller dyrt. Att en systematisk genomgång av datan kan ändra hur man tänker om problemet var en
+konkret lärdom.
+
+### 4.2 Vad har vi lärt oss
+
+Den viktigaste lärdomen kom innan vi skrev en enda rad modellkod: valet av dataset. Vi bytte
+dataset flera gånger. Vi började med studentdata, som hade en tydlig målvariabel men gav för lite
+att analysera. Sedan ett Spotify-dataset, som var roligare och lärde oss att först formulera vad
+som ska predikteras, men som visade sig vara syntetiskt och därmed svårt att dra slutsatser från.
+Därefter ett dataset om skärmtid och psykisk hälsa, där vi upptäckte att en av kolumnerna i
+praktiken var målvariabeln i förklädnad, alltså ett läckage, och att området dessutom är känsligt
+att bygga ett "diagnosverktyg" kring.
+
+Först då landade vi i Telco Customer Churn. I efterhand ser vi att vi inte var obeslutsamma utan
+att vi successivt lärde oss vad som gör ett dataset lämpligt, en målvariabel som faktiskt finns i
+datan, tillräckligt många och olika typer av förklarande variabler, en verksamhetsfråga som gör
+modellen meningsfull, och frånvaro av läckage. Det vände på vår arbetsordning. Man väljer inte
+data först och letar sedan efter något att göra med den, man formulerar en fråga och väljer data
+som kan besvara den.
+
+Tekniskt lärde vi oss framför allt tre saker. Att train/validation/test måste hållas strikt isär
+och att testmängden rörs exakt en gång, något vi byggde in i träningsskriptet snarare än
+förlitade oss på disciplin. Att accuracy är ett vilseledande mått när en klass dominerar, och att
+threshold är ett beslut skilt från modellen. Och att feature engineering inte automatiskt tillför
+något - en av våra tre härledda kolumner visade sig ha korrelation 1,00 med en kolumn vi redan
+hade.
+
+### 4.3 Hur har arbetet med Git och GitHub fungerat
+
+Vi bestämde tidigt ett enkelt flöde: feature-grenar, pull requests mot main, och CI med lint,
+formatkontroll och tester som måste vara gröna innan merge. Det fungerade i stort sett bra. CI
+fångade fel vi själva missat, till exempel en formateringsavvikelse i en notebook som passerade
+den lokala lint-kontrollen men inte formatkontrollen.
+
+Det gick inte helt utan friktion. Vid ett tillfälle arbetade två personer ovetande på samma
+feature-gren, och den ena versionen visade sig dessutom utgå från en äldre main än den andra.
+Grenarna delade namn men nästan ingen kod. Vi löste det genom att döpa om den lokala grenen och
+pusha den separat i stället för att försöka rebasa, och tog sedan beslutet i gruppen om vilken
+version som skulle leva vidare. Lärdomen är att en gren behöver en ägare, och att man
+kontrollerar vad som finns på GitHub innan man börjar arbeta på ett grennamn som redan
+existerar.
+
+Notebooks och Git är också en dålig kombination. Outputs och metadata ger stora, oläsliga
+diffar, och konflikter i en notebook är nästan omöjliga att lösa manuellt. Vi hanterade det
+genom att bara en person arbetade i respektive notebook och genom att all logik låg i vanliga
+Python-moduler som notebooken importerade.
+
+Totalt blev det 13 pull requests, varav 8 mergades och 5 stängdes till förmån för andra
+lösningar. Granskningen skedde i gruppen och muntligt, inte som formella reviews på GitHub; i
+praktiken var det CI som var grinden före merge. Det fungerade i ett projekt av den här
+storleken, men i ett större hade vi velat ha en läsande människa på varje pull request.
+
+### 4.4 Vad hade vi gjort annorlunda
+
+Vi hade valt dataset snabbare. Tiden vi lade på tre dataset som förkastades hade räckt till att
+träna om modellen utan den redundanta kolumnen och till att skriva rapporten parallellt med koden
+i stället för efter.
+
+Vi hade också satt gränser för omfånget tidigare. Projektet fick delar som uppgiften inte kräver,
+som kundsegmentering, loggning av prediktioner i databasen och ett täckningskrav på 90 procent i
+testerna. Delarna är bra i sig, men de kostade tid som hade gett mer i rapporten och i att alla
+tre kan förklara varje del av koden.
+
+Vi använde AI-verktyg som stöd under hela projektet, för kodgranskning, för
+att diskutera analysen och för att skriva kod i moduler vi själva specificerat. Det fungerade
+bäst när vi satte tydliga regler för vad verktyget fick göra och alltid förstod resultatet innan
+det gick in i repot. Det fungerade sämst när koden blev mer avancerad än vår egen förståelse hann
+bli, och vi fick backa och läsa in oss i efterhand. Nästa gång skulle vi använda verktygen mer
+för att förklara och mindre för att generera.
+
+Slutligen hade vi tagit beslutet om de härledda kolumnerna innan slutmodellen tränades. Nu står
+det i EDA:n att en av dem är redundant, samtidigt som den sitter i den modell som körs i appen.
+Det är försvarbart, trädmodeller skadas inte av det, men det är inte det beslut vi hade tagit med
+facit i hand.
