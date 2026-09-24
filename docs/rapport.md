@@ -156,7 +156,7 @@ felfallstester för saknad fil/kolumn/modell/databas, ogiltig target, okänd kat
 threshold utanför 0–1. Ruff för lint och formatering. GitHub Actions kör lint, tester på
 Python 3.11 och 3.12 samt en end-to-end-träning på varje pull request.
 
-**Versioner.** Python 3.11+, pandas 3.0, scikit-learn 1.9, Streamlit 1.63, matplotlib 3.10.
+**Versioner.** Python 3.11+, pandas 3.0, scikit-learn 1.9, Streamlit 1.63, matplotlib 3.10
 
 ## 4. Utvärdering av gruppens arbete
 
